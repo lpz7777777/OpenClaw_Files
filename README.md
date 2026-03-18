@@ -1,27 +1,42 @@
-# OpenClaw 文件管理系统
+# OpenClaw Files
 
-一个基于 Electron + Python 的桌面文件整理工具。应用会分析目标文件夹结构，并生成可确认、可回滚的整理计划。
+基于 Electron + Python 的智能文件整理桌面工具，通过 OpenClaw AI 分析文件夹结构，生成可确认、可回滚的整理建议。
 
-当前工程支持两种 AI 调用方式：
+## 功能特性
 
-1. 直接调用 Anthropic API
-2. 通过本地 OpenClaw Gateway 的 WebSocket 网关调用
+### 核心功能
 
-## 功能
+- **智能分析**：递归扫描各级子目录，分析文件分布、扩展名聚类，生成详细的整理建议
+- **可视化工作区**：三栏布局，左侧资源树、中间文档预览、右侧分析面板
+- **逐条确认**：每条建议可单独确认执行，也可一键执行全部
+- **安全回滚**：支持最近一轮操作的逆序回滚
+- **文档预览**：支持 Word (.docx)、Excel (.xlsx/.xls/.csv) 文件预览
 
-- 选择任意本地文件夹进行分析
-- 生成文件分类与重命名建议
-- 用户确认后执行移动或重命名
-- 支持最近一次操作回滚
-- 支持 Anthropic API 和 OpenClaw Gateway 双模式
+### 界面特性
+
+- 浅色扁平主题，清晰舒适
+- 文件类型图标与颜色区分
+- 结构化分析摘要显示
+- 多标签页文件预览
 
 ## 技术栈
 
-- 前端: Electron + HTML/CSS/JavaScript
-- 后端: Python + HTTP Server
-- AI: Anthropic Claude API 或 OpenClaw Gateway WebSocket
+| 层级 | 技术 |
+|------|------|
+| 前端 | Electron + HTML/CSS/JavaScript |
+| 后端 | Python + HTTP Server |
+| AI | OpenClaw Gateway (WebSocket) 或 Anthropic API |
 
 ## 安装
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/lpz7777777/OpenClaw_Files.git
+cd OpenClaw_Files
+```
+
+### 2. 安装依赖
 
 ```bash
 npm install
@@ -30,28 +45,20 @@ pip install -r requirements.txt
 
 ## 配置
 
-先复制环境变量模板：
+复制环境变量模板：
 
 ```bash
 copy .env.example .env
 ```
 
-### 方式 1：直连 Anthropic API
+### 方式一：使用 OpenClaw Gateway（推荐）
 
-```env
-USE_GATEWAY=false
-ANTHROPIC_API_KEY=your_actual_api_key_here
-```
-
-### 方式 2：使用 OpenClaw Gateway WebSocket
-
-如果你的 Gateway 运行在 `ws://127.0.0.1:18789`，并使用本地 token `openclaw-local-token`，可以这样配置：
+如果你的 OpenClaw Gateway 运行在 `ws://127.0.0.1:18789`：
 
 ```env
 USE_GATEWAY=true
 GATEWAY_URL=ws://127.0.0.1:18789
 GATEWAY_TOKEN=openclaw-local-token
-GATEWAY_PASSWORD=
 GATEWAY_AGENT_ID=main
 GATEWAY_USER=main
 GATEWAY_SESSION_KEY=agent:main:main
@@ -60,30 +67,16 @@ GATEWAY_CLIENT_ID=gateway-client
 GATEWAY_CLIENT_MODE=backend
 GATEWAY_SCOPES=operator.read,operator.write
 GATEWAY_TIMEOUT=60
+GATEWAY_STATE_DIR=.openclaw-state
+GATEWAY_AUTO_APPROVE_LOCAL_PAIRING=true
 ```
 
-说明：
+### 方式二：直连 Anthropic API
 
-- `GATEWAY_URL`：Gateway 的 WebSocket 地址。
-- `GATEWAY_TOKEN`：当前本地 Gateway token。
-- `GATEWAY_PASSWORD`：如果你的实例还要求 shared/system password，可在这里填写。
-- `GATEWAY_SESSION_KEY`：当前默认主会话键可设置为 `agent:main:main`。
-- `GATEWAY_SCOPES`：默认请求 `operator.read,operator.write`，如果当前 token 权限不足，测试脚本会直接提示缺少 scope。
-
-## Gateway 接入方式
-
-本工程现在使用的 Gateway 接口为 WebSocket：
-
-- WebSocket URL：`ws://127.0.0.1:18789`
-- 认证：token 或 password
-- 当前客户端标识：`gateway-client`
-- 当前模式：`backend`
-
-后端会通过 WebSocket RPC 调用以下能力：
-
-- `connect`
-- `chat.send`
-- `chat.history`
+```env
+USE_GATEWAY=false
+ANTHROPIC_API_KEY=your_actual_api_key_here
+```
 
 ## 启动
 
@@ -91,83 +84,72 @@ GATEWAY_TIMEOUT=60
 npm start
 ```
 
-应用会启动：
-
-1. Python 后端服务，默认端口 `8765`
-2. Electron 桌面界面
+应用会同时启动：
+- Python 后端服务（默认端口 8765）
+- Electron 桌面界面
 
 ## 使用流程
 
-1. 点击“选择文件夹”
-2. 选择需要整理的本地目录
-3. 等待系统生成整理方案
-4. 确认后执行文件操作
-5. 如有需要，可执行最近一次回滚
+1. **选择文件夹**：点击"选择文件夹"，选择需要整理的本地目录
+2. **等待分析**：系统会递归扫描目录结构，通过 AI 生成整理建议
+3. **查看建议**：右侧面板显示结构化分析摘要和操作建议
+4. **确认执行**：
+   - 逐条确认：点击每条建议的"确认这条"按钮
+   - 全部执行：点击底部"确认全部"按钮
+5. **回滚（可选）**：如有需要，可执行最近一轮操作的回滚
 
-## Gateway 验证脚本
+## 项目结构
 
-可以用下面两个脚本做本地检查：
+```
+OpenClaw_Files/
+├── backend/
+│   ├── file_analyzer.py    # 文件分析与 AI 调用
+│   ├── gateway_client.py   # OpenClaw Gateway 客户端
+│   └── server.py           # HTTP 服务
+├── index.html              # 主界面
+├── renderer.js             # 前端逻辑
+├── main.js                 # Electron 主进程
+├── styles.css              # 样式
+├── test_gateway.py         # Gateway 连接测试
+├── discover_gateway.py     # Gateway 能力探测
+├── .env.example            # 环境变量模板
+├── requirements.txt        # Python 依赖
+├── package.json            # Node 依赖
+├── DEV_LOG.md              # 开发日志
+└── README.md               # 本文件
+```
+
+## Gateway 验证
+
+可以使用以下脚本验证 Gateway 连接：
 
 ```bash
 python test_gateway.py
 python discover_gateway.py
 ```
 
-它们会检查：
-
+验证内容：
 - WebSocket 握手是否成功
 - 当前 token/password 是否可用
 - 当前会话键是否正确
-- `chat.history` / `chat.send` 是否被 scope 限制
+- chat.history / chat.send 是否被 scope 限制
 
-## 当前已验证的本地事实
+## 支持的文件预览
 
-在你这台机器上，当前 OpenClaw 实例已经确认：
-
-- 控制台页面可访问
-- 健康检查正常
-- 实际接入方式是 WebSocket，不是 `/v1/responses`
-- `openclaw-control-ui` 这类浏览器控制台客户端会要求设备身份
-- `gateway-client` 这类普通 WebSocket 客户端可以直接用 token 建立连接
-
-如果握手成功但聊天请求仍失败，并提示 `missing scope: operator.read` 或 `missing scope: operator.write`，那说明：
-
-- 当前 token 能连上 Gateway
-- 但它没有授予当前请求所需的操作权限
-
-这时需要调整：
-
-1. Gateway token 本身的权限
-2. 或者补充 `GATEWAY_PASSWORD`
-3. 或者在 OpenClaw 侧放宽当前客户端可请求的 scope
-
-## 项目结构
-
-```text
-OpenClaw_Files/
-├── backend/
-│   ├── file_analyzer.py
-│   ├── gateway_client.py
-│   └── server.py
-├── discover_gateway.py
-├── test_gateway.py
-├── index.html
-├── renderer.js
-├── main.js
-├── styles.css
-├── README.md
-├── QUICKSTART.md
-├── OPENCLAW_GATEWAY.md
-├── .env.example
-└── requirements.txt
-```
+| 类型 | 扩展名 | 支持程度 |
+|------|--------|----------|
+| 文本文件 | .txt, .md, .json, .js, .py, .html, .css 等 | 完整预览 |
+| Word 文档 | .docx | 正文段落预览 |
+| Excel 表格 | .xlsx, .xls, .csv | 首个工作表预览 |
+| 旧版 Word | .doc | 兼容提示 |
+| 其他文件 | 二进制文件 | 占位提示 |
 
 ## 注意事项
 
 - 执行文件整理前，建议先备份重要数据
-- 回滚只支持最近一次操作
+- 回滚只支持最近一轮操作
 - 如果 Gateway 模式不可用，应用会回退到直连 Anthropic API 模式
-- 如果未配置有效的 Anthropic API key，且 Gateway 也不可用，后端会在分析时提示配置错误
+- 如果未配置有效的 API key 且 Gateway 也不可用，后端会在分析时提示配置错误
 
 ## 许可证
 

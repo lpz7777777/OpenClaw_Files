@@ -141,7 +141,7 @@ class GatewayClient:
                 ws = self._open_websocket()
                 self._connect(ws)
 
-                session_key = self._build_session_key(user=user)
+                session_key = self._build_request_session_key(user=user)
                 run_id = str(uuid.uuid4())
                 request_id = self._send_request_without_waiting(
                     ws,
@@ -155,7 +155,9 @@ class GatewayClient:
                 )
 
                 final_text = ""
-                partial_text = ""
+                streamed_text = ""
+                request_accepted = False
+                active_stream_run_id = None
 
                 while True:
                     message = self._recv_json(ws)
@@ -164,37 +166,52 @@ class GatewayClient:
                     if message_type == "res" and message.get("id") == request_id:
                         if not message.get("ok"):
                             raise self._build_request_error(message)
+                        request_accepted = True
                         continue
 
                     if message_type != "event" or message.get("event") != "chat":
                         continue
 
+                    if not request_accepted:
+                        continue
+
                     payload = message.get("payload", {})
                     if payload.get("sessionKey") != session_key:
-                        continue
-                    if payload.get("runId") != run_id:
                         continue
 
                     state = payload.get("state")
                     if state == "delta":
+                        payload_run_id = payload.get("runId")
+                        if active_stream_run_id is None and payload_run_id:
+                            active_stream_run_id = payload_run_id
+                        elif active_stream_run_id and payload_run_id and payload_run_id != active_stream_run_id:
+                            continue
+
                         delta_text = self._extract_chat_text(payload.get("message"))
                         if delta_text:
-                            partial_text = delta_text
+                            streamed_text = self._merge_stream_text(streamed_text, delta_text)
                         continue
 
                     if state == "final":
-                        final_text = self._extract_chat_text(payload.get("message")) or partial_text
+                        final_chunk = self._extract_chat_text(payload.get("message"))
+                        final_text = self._merge_stream_text(streamed_text, final_chunk)
                         break
 
                     if state == "aborted":
-                        final_text = self._extract_chat_text(payload.get("message")) or partial_text
+                        aborted_chunk = self._extract_chat_text(payload.get("message"))
+                        final_text = self._merge_stream_text(streamed_text, aborted_chunk)
                         break
 
                     if state == "error":
                         error_message = payload.get("errorMessage") or "Gateway chat error"
                         raise Exception(error_message)
 
-                return final_text.strip()
+                resolved_text = (final_text or streamed_text).strip()
+                if resolved_text:
+                    return resolved_text
+
+                history_text = self._fetch_latest_assistant_text(ws, session_key)
+                return history_text.strip()
             finally:
                 if ws is not None:
                     self._safe_close(ws)
@@ -474,6 +491,10 @@ class GatewayClient:
         stable_user = (user or self.default_user or "main").strip() or "main"
         return f"agent:{self.agent_id}:{stable_user}"
 
+    def _build_request_session_key(self, user: Optional[str] = None) -> str:
+        base_session_key = self._build_session_key(user=user)
+        return f"{base_session_key}:req:{uuid.uuid4().hex}"
+
     def _extract_chat_text(self, message: Any) -> str:
         if message is None:
             return ""
@@ -509,6 +530,43 @@ class GatewayClient:
             return message["text"]
 
         return json.dumps(message, ensure_ascii=False)
+
+    def _merge_stream_text(self, current_text: str, incoming_text: str) -> str:
+        current = current_text or ""
+        incoming = incoming_text or ""
+        if not incoming:
+            return current
+        if not current:
+            return incoming
+        if incoming.startswith(current):
+            return incoming
+        if current.endswith(incoming):
+            return current
+        if incoming in current:
+            return current
+        return current + incoming
+
+    def _fetch_latest_assistant_text(self, ws, session_key: str) -> str:
+        for _ in range(3):
+            history = self._send_request(
+                ws,
+                "chat.history",
+                {"sessionKey": session_key, "limit": 10},
+            )
+            messages = history.get("messages", []) if isinstance(history, dict) else []
+            for message in reversed(messages):
+                if not isinstance(message, dict):
+                    continue
+                if message.get("role") != "assistant":
+                    continue
+
+                text = self._extract_chat_text(message)
+                if text.strip():
+                    return text
+
+            time.sleep(0.2)
+
+        return ""
 
     def _parse_scopes(self, raw_scopes: str) -> List[str]:
         scopes = [scope.strip() for scope in raw_scopes.split(",") if scope.strip()]

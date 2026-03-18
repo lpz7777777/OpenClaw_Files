@@ -114,6 +114,7 @@ rollbackBtn.addEventListener("click", async () => {
 
     try {
         const response = await axios.post(`${API_BASE}/rollback`, {});
+
         if (response.data.success) {
             state.lastResult = {
                 type: "success",
@@ -321,9 +322,14 @@ function createTreeBranch(node, depth) {
     }
     item.style.setProperty("--depth", depth);
 
+    const iconMeta =
+        node.type === "directory"
+            ? { label: node.expanded ? "[-]" : "[+]", tone: "folder" }
+            : fileIconMeta(node.name, node.extension);
+
     const icon = document.createElement("span");
-    icon.className = "tree-icon";
-    icon.textContent = node.type === "directory" ? (node.expanded ? "[-]" : "[+]") : fileIcon(node.name, node.extension);
+    icon.className = `tree-icon tree-icon-${iconMeta.tone}`;
+    icon.textContent = iconMeta.label;
 
     const label = document.createElement("span");
     label.className = "tree-label";
@@ -498,7 +504,7 @@ function renderTabStrip() {
 }
 
 function renderOverviewDocument() {
-    const summaryText = state.currentPlan?.summary || "当前还没有新的分析摘要。";
+    const summaryMarkup = renderSummaryMarkup(state.currentPlan);
     const categories = Array.isArray(state.currentPlan?.categories) ? state.currentPlan.categories : [];
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
 
@@ -529,7 +535,7 @@ function renderOverviewDocument() {
 
                 <article class="overview-card full-span">
                     <h4>最近摘要</h4>
-                    <p>${escapeHtml(summaryText)}</p>
+                    ${summaryMarkup}
                 </article>
 
                 <article class="overview-card">
@@ -797,7 +803,7 @@ async function readSpreadsheetPreview(filePath, fileStat) {
     const limitedRows = matrix.slice(0, 41);
     const headers = limitedRows[0] || [];
     const rows = limitedRows.slice(1);
-    const totalRows = matrix.length > 0 ? matrix.length - 1 : 0;
+    const totalRows = Math.max(matrix.length - 1, 0);
 
     return {
         kind: "spreadsheet",
@@ -826,7 +832,7 @@ function renderAnalysis() {
 
     if (state.currentPlan) {
         planSummary.className = "plan-summary";
-        planSummary.innerHTML = `<p>${escapeHtml(state.currentPlan.summary || "未提供摘要。")}</p>`;
+        planSummary.innerHTML = renderSummaryMarkup(state.currentPlan);
     } else {
         planSummary.className = "plan-summary empty-inline";
         planSummary.textContent = "暂无分析输出。";
@@ -848,14 +854,17 @@ function renderAnalysis() {
 
     if (operations.length > 0) {
         operationsList.className = "operations-list";
-        operationsList.innerHTML = operations.map((operation, index) => renderOperationItem(operation, index)).join("");
+        operationsList.innerHTML = operations
+            .map((operation, index) => renderOperationItem(operation, index))
+            .join("");
 
         operationsList.querySelectorAll(".operation-confirm-btn").forEach((button) => {
             button.addEventListener("click", async () => {
                 const index = Number(button.dataset.operationIndex);
-                if (Number.isInteger(index)) {
-                    await executeSingleOperation(index);
+                if (!Number.isInteger(index)) {
+                    return;
                 }
+                await executeSingleOperation(index);
             });
         });
     } else {
@@ -875,16 +884,38 @@ function renderAnalysis() {
     }
 }
 
+function getOperationMeta(operation) {
+    switch (operation?.type) {
+        case "move":
+            return { label: "移动", tone: "move", sourceLabel: "源", targetLabel: "目标" };
+        case "rename":
+            return { label: "重命名文件", tone: "rename", sourceLabel: "源", targetLabel: "目标" };
+        case "rename_folder":
+            return { label: "重命名文件夹", tone: "rename-folder", sourceLabel: "目录", targetLabel: "新目录" };
+        case "create_folder":
+            return { label: "创建文件夹", tone: "create-folder", sourceLabel: "", targetLabel: "目录" };
+        case "delete":
+            return { label: "删除", tone: "delete", sourceLabel: "路径", targetLabel: "" };
+        default:
+            return { label: "整理", tone: "rename", sourceLabel: "源", targetLabel: "目标" };
+    }
+}
+
 function renderOperationItem(operation, index) {
-    const typeLabel = operation.type === "move" ? "移动" : "重命名";
-    const typeClass = operation.type === "move" ? "move" : "rename";
+    const operationMeta = getOperationMeta(operation);
     const isCompleted = state.completedOperationIndexes.has(index);
+    const sourceMarkup = operation.source
+        ? `<div><span>${operationMeta.sourceLabel}</span><code>${escapeHtml(operation.source || "")}</code></div>`
+        : "";
+    const targetMarkup = operation.target
+        ? `<div><span>${operationMeta.targetLabel}</span><code>${escapeHtml(operation.target || "")}</code></div>`
+        : "";
 
     return `
         <article class="operation-item ${isCompleted ? "is-completed" : ""}">
             <div class="operation-topline">
                 <div class="operation-heading">
-                    <span class="operation-type ${typeClass}">${typeLabel}</span>
+                    <span class="operation-type ${operationMeta.tone}">${operationMeta.label}</span>
                     ${
                         isCompleted
                             ? '<span class="operation-status-badge">已执行</span>'
@@ -896,16 +927,117 @@ function renderOperationItem(operation, index) {
                 <span class="operation-reason">${escapeHtml(operation.reason || "无说明")}</span>
             </div>
             <div class="operation-paths">
-                <div><span>源</span><code>${escapeHtml(operation.source || "")}</code></div>
-                <div><span>目标</span><code>${escapeHtml(operation.target || "")}</code></div>
+                ${sourceMarkup}
+                ${targetMarkup}
             </div>
         </article>
     `;
 }
 
+function renderSummaryMarkup(plan) {
+    const summaryPoints = getSummaryPoints(plan);
+    if (summaryPoints.length === 0) {
+        return '<p class="empty-inline">暂无分析摘要。</p>';
+    }
+
+    return `
+        <ul class="summary-list">
+            ${summaryPoints
+                .map((point) => `<li class="summary-item">${escapeHtml(point)}</li>`)
+                .join("")}
+        </ul>
+    `;
+}
+
+function getSummaryPoints(plan) {
+    if (!plan) {
+        return [];
+    }
+
+    if (Array.isArray(plan.summary_points)) {
+        const normalized = plan.summary_points
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+        if (normalized.length > 0) {
+            return normalized;
+        }
+    }
+
+    const summaryText = String(plan.summary || "").trim();
+    if (!summaryText) {
+        return [];
+    }
+
+    const byLines = summaryText
+        .split(/\r?\n+/)
+        .map((line) => line.replace(/^[-*•\d.\s]+/, "").trim())
+        .filter(Boolean);
+    if (byLines.length > 1) {
+        return byLines;
+    }
+
+    return summaryText
+        .split(/[；;。]/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+}
+
 function setAnalysisStatus(tone, message) {
     state.analysisTone = tone;
     state.analysisMessage = message;
+}
+
+function rewriteOperationPathWithRenameFolder(rawPath, renameOperation) {
+    const pathValue = String(rawPath || "");
+    if (!pathValue) {
+        return pathValue;
+    }
+
+    const sourcePrefix = String(renameOperation?.source || "");
+    const targetPrefix = String(renameOperation?.target || "");
+    if (!sourcePrefix || !targetPrefix) {
+        return pathValue;
+    }
+
+    if (pathValue === sourcePrefix) {
+        return targetPrefix;
+    }
+
+    if (pathValue.startsWith(`${sourcePrefix}/`)) {
+        return `${targetPrefix}${pathValue.slice(sourcePrefix.length)}`;
+    }
+
+    return pathValue;
+}
+
+function updatePendingOperationsAfterExecution(executedOperations) {
+    if (!Array.isArray(state.currentPlan?.operations) || executedOperations.length === 0) {
+        return;
+    }
+
+    const renameFolderOperations = executedOperations.filter(
+        (operation) => operation?.type === "rename_folder"
+    );
+    if (renameFolderOperations.length === 0) {
+        return;
+    }
+
+    state.currentPlan.operations = state.currentPlan.operations.map((operation) => {
+        const updatedOperation = { ...operation };
+
+        renameFolderOperations.forEach((renameOperation) => {
+            updatedOperation.source = rewriteOperationPathWithRenameFolder(
+                updatedOperation.source,
+                renameOperation
+            );
+            updatedOperation.target = rewriteOperationPathWithRenameFolder(
+                updatedOperation.target,
+                renameOperation
+            );
+        });
+
+        return updatedOperation;
+    });
 }
 
 function updateActionState() {
@@ -962,6 +1094,7 @@ async function executeOperations(indexes, loadingMessage) {
         });
 
         if (response.data.success) {
+            updatePendingOperationsAfterExecution(operations.map(({ operation }) => operation));
             operations.forEach(({ index }) => state.completedOperationIndexes.add(index));
             state.lastResult = {
                 type: "success",
@@ -1042,62 +1175,62 @@ function looksBinary(buffer) {
     return suspicious / buffer.length > 0.1;
 }
 
-function fileIcon(fileName, extension) {
+function fileIconMeta(fileName, extension) {
     const normalizedName = String(fileName || "").toLowerCase();
     const iconMap = {
-        ".js": "JS",
-        ".jsx": "JS",
-        ".ts": "TS",
-        ".tsx": "TS",
-        ".json": "{}",
-        ".py": "PY",
-        ".md": "MD",
-        ".html": "</>",
-        ".css": "CSS",
-        ".scss": "CSS",
-        ".less": "CSS",
-        ".txt": "TXT",
-        ".pdf": "PDF",
-        ".doc": "DOC",
-        ".docx": "DOC",
-        ".xls": "XLS",
-        ".xlsx": "XLS",
-        ".csv": "CSV",
-        ".ppt": "PPT",
-        ".pptx": "PPT",
-        ".png": "IMG",
-        ".jpg": "IMG",
-        ".jpeg": "IMG",
-        ".gif": "IMG",
-        ".svg": "SVG",
-        ".webp": "IMG",
-        ".mp3": "AUD",
-        ".wav": "AUD",
-        ".flac": "AUD",
-        ".mp4": "VID",
-        ".mov": "VID",
-        ".avi": "VID",
-        ".zip": "ZIP",
-        ".rar": "ZIP",
-        ".7z": "ZIP",
-        ".tar": "ZIP",
-        ".gz": "ZIP",
-        ".env": "ENV",
-        ".yml": "CFG",
-        ".yaml": "CFG",
-        ".ini": "CFG",
-        ".toml": "CFG",
-        ".xml": "XML",
-        ".sql": "SQL",
-        ".db": "DB",
-        ".sqlite": "DB",
+        ".js": { label: "JS", tone: "script" },
+        ".jsx": { label: "JS", tone: "script" },
+        ".ts": { label: "TS", tone: "script" },
+        ".tsx": { label: "TS", tone: "script" },
+        ".py": { label: "PY", tone: "script" },
+        ".html": { label: "</>", tone: "code" },
+        ".css": { label: "CSS", tone: "code" },
+        ".scss": { label: "CSS", tone: "code" },
+        ".less": { label: "CSS", tone: "code" },
+        ".json": { label: "{}", tone: "data" },
+        ".xml": { label: "XML", tone: "data" },
+        ".sql": { label: "SQL", tone: "data" },
+        ".db": { label: "DB", tone: "data" },
+        ".sqlite": { label: "DB", tone: "data" },
+        ".md": { label: "MD", tone: "doc" },
+        ".txt": { label: "TXT", tone: "doc" },
+        ".doc": { label: "DOC", tone: "doc" },
+        ".docx": { label: "DOC", tone: "doc" },
+        ".pdf": { label: "PDF", tone: "doc" },
+        ".xls": { label: "XLS", tone: "sheet" },
+        ".xlsx": { label: "XLS", tone: "sheet" },
+        ".csv": { label: "CSV", tone: "sheet" },
+        ".ppt": { label: "PPT", tone: "slides" },
+        ".pptx": { label: "PPT", tone: "slides" },
+        ".png": { label: "IMG", tone: "media" },
+        ".jpg": { label: "IMG", tone: "media" },
+        ".jpeg": { label: "IMG", tone: "media" },
+        ".gif": { label: "IMG", tone: "media" },
+        ".svg": { label: "SVG", tone: "media" },
+        ".webp": { label: "IMG", tone: "media" },
+        ".mp3": { label: "AUD", tone: "media" },
+        ".wav": { label: "AUD", tone: "media" },
+        ".flac": { label: "AUD", tone: "media" },
+        ".mp4": { label: "VID", tone: "media" },
+        ".mov": { label: "VID", tone: "media" },
+        ".avi": { label: "VID", tone: "media" },
+        ".zip": { label: "ZIP", tone: "archive" },
+        ".rar": { label: "ZIP", tone: "archive" },
+        ".7z": { label: "ZIP", tone: "archive" },
+        ".tar": { label: "ZIP", tone: "archive" },
+        ".gz": { label: "ZIP", tone: "archive" },
+        ".env": { label: "ENV", tone: "config" },
+        ".yml": { label: "CFG", tone: "config" },
+        ".yaml": { label: "CFG", tone: "config" },
+        ".ini": { label: "CFG", tone: "config" },
+        ".toml": { label: "CFG", tone: "config" },
     };
 
     if (normalizedName === "readme.md") {
-        return "DOC";
+        return { label: "DOC", tone: "doc" };
     }
 
-    return iconMap[extension] || "FILE";
+    return iconMap[extension] || { label: "FILE", tone: "generic" };
 }
 
 function formatBytes(value) {

@@ -453,4 +453,148 @@ npm start
 2. **前端已升级为三栏工作区**
    现在用户可以在同一界面中浏览目录树、预览多个文件，并查看文件夹分析结果。
 
-当前项目已经从“能跑的原型”进入“有实际工作区体验的可继续迭代版本”。
+当前项目已经从"能跑的原型"进入"有实际工作区体验的可继续迭代版本"。
+
+---
+
+## 八、后续开发迭代记录
+
+### 1. 浅色主题与扁平化改造
+
+将原先深色玻璃拟态风格改为浅色扁平主题：
+
+- 统一浅色变量体系：`--bg: #f4efe7`、`--bg-panel: #fffdf8`
+- 顶栏和三栏面板改为实色卡片，弱化阴影，强化边框与留白
+- 按钮、标签页、文件树、分析状态卡、操作列表和代码预览区同步扁平化
+- 窗口加载底色同步改为浅色，避免启动时闪出深底
+
+改动位置：
+- [styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css#L1-L29)
+- [main.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/main.js#L18)
+
+### 2. 文件类型图标与颜色区分
+
+左侧资源树现在按文件类型显示不同图标和颜色：
+
+- 目录：绿色标签 `DIR`
+- 脚本文件（JS/TS/PY/SH）：蓝色系
+- 代码文件（JAVA/C/CPP/GO/RS）：青绿色系
+- 数据文件（JSON/XML/SQL/DB）：紫色系
+- 文档文件（MD/TXT/DOC）：棕色系
+- 表格文件（XLS/XLSX/CSV）：绿色系
+- 演示文件（PPT/PPTX）：橙色系
+- 媒体文件（PNG/JPG/MP4）：粉红色系
+- 压缩文件（ZIP/RAR/7Z）：土黄色系
+- 配置文件（ENV/YAML/TOML）：灰蓝色系
+
+实现位置：
+- 图标分类逻辑：[renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L1102)
+- 颜色样式：[styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css#L330-L394)
+
+### 3. 逐条确认执行
+
+右侧建议列表支持"逐条确认执行"：
+
+- 每条建议右上角有"确认这条"按钮
+- 执行后按钮变为"已执行"状态
+- 底部保留"确认全部"按钮，用于一次性执行所有未确认项
+- 后端执行记录改为可累积，连续确认多条后回滚会按逆序退回
+
+实现位置：
+- [index.html](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html#L117)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L715)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L771)
+- [backend/server.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py#L73)
+
+### 4. 子目录分析与 Word/Excel 预览
+
+**递归扫描增强：**
+- 不再只看根目录，递归扫描各级子文件夹
+- 把子目录文件分布、扩展名聚类、每层文件数和子目录数送入提示词
+- 新增 `folder_index` 结构，显式提供每个子目录的路径、文件数、主要扩展名、示例文件
+
+**文档预览：**
+- `.docx`：使用 mammoth 提取正文段落做阅读式预览
+- `.xlsx/.xls/.csv`：使用 xlsx 库渲染首个工作表为表格预览
+- `.doc`：显示兼容提示，暂不支持正文解析
+
+新增依赖：
+- `mammoth: ^1.12.0`
+- `xlsx: ^0.18.5`
+
+实现位置：
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L79-L123)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L627)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L660)
+- [styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css#L489)
+
+### 5. 分析摘要结构化显示
+
+右侧分析摘要改为一条一条的结构化显示：
+
+- 后端提示词新增 `summary_points` 字段
+- 前端优先渲染为清晰列表
+- 兼容旧格式：若模型只返回 `summary` 字符串，自动按换行和中文分句拆分
+
+实现位置：
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L82)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L915)
+- [styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css#L720)
+
+### 6. JSON 容错与自动修复链路
+
+解决 OpenClaw 返回格式不正确的问题：
+
+**容错链路：**
+1. 提取 JSON 主体（从代码块或说明文字中）
+2. 本地清洗（处理代码块、智能引号、尾逗号、路径反斜杠）
+3. 尝试解析
+4. 若失败，发起"只修复 JSON"的修复请求
+5. 字段归一化
+
+**新增函数：**
+- `_repair_plan_json`：把坏掉的返回内容再喂给模型修复
+- `_extract_json_candidate`：从说明文字或代码块提取 JSON
+- `_attempt_local_json_cleanup`：本地清洗常见问题
+- `_normalize_relative_path`：统一路径分隔符
+
+实现位置：
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L133-L297)
+
+### 7. 流式响应分片拼接修复
+
+解决 OpenClaw Gateway 流式返回长 JSON 时分片丢失的问题：
+
+- 原先只保留最后一个 delta 分片，前面内容被覆盖
+- 改为"累计拼接"逻辑
+- 新增 `_merge_stream_text` 处理流式片段拼接
+
+实现位置：
+- [backend/gateway_client.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/gateway_client.py#L158-L199)
+- [backend/gateway_client.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/gateway_client.py#L515)
+
+---
+
+## 九、当前功能清单
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| OpenClaw Gateway 接入 | ✅ | WebSocket + 设备身份 + 配对 |
+| 三栏工作区布局 | ✅ | 左侧资源树、中间预览、右侧分析 |
+| 浅色扁平主题 | ✅ | 实色卡片、弱阴影、强边框 |
+| 文件类型图标 | ✅ | 不同类型不同颜色 |
+| 逐条确认执行 | ✅ | 每条建议可单独确认 |
+| 子目录递归分析 | ✅ | 扫描各级子文件夹 |
+| Word/Excel 预览 | ✅ | docx/xlsx/xls/csv |
+| 分析摘要结构化 | ✅ | 一条一条显示 |
+| JSON 容错修复 | ✅ | 本地清洗 + 自动修复 |
+| 流式响应拼接 | ✅ | 分片累计拼接 |
+| 回滚 | ✅ | 支持最近一轮操作 |
+
+---
+
+## 十、当前版本信息
+
+- 版本：1.0.0
+- 最后更新：2026-03-19
+- 已推送到 GitHub：`https://github.com/lpz7777777/OpenClaw_Files`

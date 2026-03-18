@@ -327,6 +327,72 @@ button:disabled {
     font-weight: 700;
 }
 
+.tree-icon-folder {
+    background: #e8efe4;
+    color: #4d6b41;
+    border-color: rgba(77, 107, 65, 0.18);
+}
+
+.tree-icon-script {
+    background: #e6f0ff;
+    color: #2d5ea8;
+    border-color: rgba(45, 94, 168, 0.18);
+}
+
+.tree-icon-code {
+    background: #eaf5f2;
+    color: #21695e;
+    border-color: rgba(33, 105, 94, 0.18);
+}
+
+.tree-icon-data {
+    background: #f0edff;
+    color: #6452b8;
+    border-color: rgba(100, 82, 184, 0.18);
+}
+
+.tree-icon-doc {
+    background: #f9ebe0;
+    color: #9a5b2f;
+    border-color: rgba(154, 91, 47, 0.18);
+}
+
+.tree-icon-sheet {
+    background: #e7f5ea;
+    color: #2f7d48;
+    border-color: rgba(47, 125, 72, 0.18);
+}
+
+.tree-icon-slides {
+    background: #fff0de;
+    color: #b06a18;
+    border-color: rgba(176, 106, 24, 0.18);
+}
+
+.tree-icon-media {
+    background: #fce8ef;
+    color: #b04c72;
+    border-color: rgba(176, 76, 114, 0.18);
+}
+
+.tree-icon-archive {
+    background: #efe7dc;
+    color: #7b6243;
+    border-color: rgba(123, 98, 67, 0.18);
+}
+
+.tree-icon-config {
+    background: #ececf2;
+    color: #5b6178;
+    border-color: rgba(91, 97, 120, 0.18);
+}
+
+.tree-icon-generic {
+    background: #f3efe9;
+    color: #6e6558;
+    border-color: rgba(110, 101, 88, 0.18);
+}
+
 .tree-label {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -651,6 +717,31 @@ button:disabled {
     line-height: 1.7;
 }
 
+.summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    list-style: none;
+}
+
+.summary-item {
+    position: relative;
+    padding-left: 18px;
+    color: var(--text);
+    line-height: 1.7;
+}
+
+.summary-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.7em;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
 .operations-list {
     display: flex;
     flex-direction: column;
@@ -701,6 +792,21 @@ button:disabled {
 .operation-type.rename {
     background: var(--warning-soft);
     color: var(--warning);
+}
+
+.operation-type.rename-folder {
+    background: #ece8fa;
+    color: #6a4fb3;
+}
+
+.operation-type.create-folder {
+    background: #e6f3eb;
+    color: #2a7456;
+}
+
+.operation-type.delete {
+    background: var(--danger-soft);
+    color: var(--danger);
 }
 
 .operation-reason {
