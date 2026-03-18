@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark">OC</div>
+                <div>
+                    <p class="brand-kicker">OpenClaw Workspace</p>
+                    <h1>文件整理工作区</h1>
+                </div>
+            </div>
+
+            <div class="toolbar-actions">
+                <button id="selectFolderBtn" class="primary-btn">打开文件夹</button>
+                <button id="analyzeBtn" class="secondary-btn">重新分析</button>
+            </div>
+        </header>
+
+        <section class="context-bar">
+            <div class="context-chip">当前目录</div>
+            <div id="selectedPath" class="selected-path">尚未打开任何文件夹</div>
+        </section>
+
+        <main class="workspace-grid">
+            <aside class="panel explorer-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-kicker">Explorer</p>
+                        <h2>资源管理器</h2>
+                    </div>
+                    <div id="explorerStats" class="panel-meta">等待打开</div>
+                </div>
+
+                <div id="explorerTree" class="explorer-tree empty-state">
+                    选择一个文件夹后，这里会显示完整的目录结构。
+                </div>
+            </aside>
+
+            <section class="panel editor-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-kicker">Workspace</p>
+                        <h2>文档工作区</h2>
+                    </div>
+                    <div id="editorMeta" class="panel-meta">0 tabs</div>
+                </div>
+
+                <div id="tabStrip" class="tab-strip"></div>
+
+                <div id="editorContent" class="editor-content">
+                    <div class="empty-state large-empty">
+                        在左侧资源管理器中点击文件，即可像 Cursor 一样在这里打开多个文档标签页。
+                    </div>
+                </div>
+            </section>
+
+            <aside class="panel analysis-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-kicker">Analysis</p>
+                        <h2>文件夹分析结果</h2>
+                    </div>
+                    <div id="analysisMeta" class="panel-meta">等待分析</div>
+                </div>
+
+                <div id="analysisStatus" class="status-card status-idle">
+                    选择文件夹后，这里会显示 OpenClaw 输出的整理建议、操作计划和执行结果。
+                </div>
+
+                <div class="analysis-scroll">
+                    <section class="analysis-block">
+                        <div class="block-header">
+                            <h3>整理摘要</h3>
+                        </div>
+                        <div id="planSummary" class="plan-summary empty-inline">
+                            暂无分析输出。
+                        </div>
+                    </section>
+
+                    <section class="analysis-block">
+                        <div class="block-header">
+                            <h3>建议分类</h3>
+                        </div>
+                        <div id="categoriesList" class="categories-list empty-inline">
+                            暂无分类建议。
+                        </div>
+                    </section>
+
+                    <section class="analysis-block">
+                        <div class="block-header">
+                            <h3>操作列表</h3>
+                            <span id="operationsMeta" class="block-meta">0 项</span>
+                        </div>
+                        <div id="operationsList" class="operations-list empty-inline">
+                            还没有可执行的整理操作。
+                        </div>
+                    </section>
+
+                    <section class="analysis-block">
+                        <div class="block-header">
+                            <h3>执行结果</h3>
+                        </div>
+                        <div id="resultDisplay" class="result-display empty-inline">
+                            尚未执行任何文件操作。
+                        </div>
+                    </section>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="confirmBtn" class="primary-btn">确认全部</button>
+                    <button id="newAnalysisBtn" class="secondary-btn">重新分析</button>
+                    <button id="rollbackBtn" class="warning-btn">回滚</button>
+                    <button id="cancelBtn" class="ghost-btn">清空输出</button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
