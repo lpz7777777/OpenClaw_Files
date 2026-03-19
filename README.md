@@ -75,7 +75,44 @@ GATEWAY_SCOPES=operator.read,operator.write
 GATEWAY_TIMEOUT=60
 GATEWAY_STATE_DIR=.openclaw-state
 GATEWAY_AUTO_APPROVE_LOCAL_PAIRING=true
+OPENCLAW_CLI_MODE=auto
+BDPAN_CLI_MODE=auto
 ```
+
+### Windows 与 WSL 兼容说明
+
+当前版本同时兼容这两类安装方式：
+
+- Windows 本机直接安装 `openclaw` / `bdpan`
+- 仅在 WSL 内安装 `openclaw` / `bdpan`
+
+默认行为是 `auto`：
+
+- 先尝试 Windows 本机 CLI
+- 找不到时再自动回退到 WSL CLI
+
+如需强制指定，可在 `.env` 中设置：
+
+```env
+# auto / native / wsl
+OPENCLAW_CLI_MODE=auto
+BDPAN_CLI_MODE=auto
+
+# 如需指定某个 WSL 发行版，可填写名称
+OPENCLAW_WSL_DISTRO=Ubuntu
+BDPAN_WSL_DISTRO=Ubuntu
+
+# 如需手动指定 CLI 路径，也可以直接写
+# Windows 示例：C:\Users\you\AppData\Roaming\npm\openclaw.cmd
+# WSL 示例：/home/you/.local/bin/openclaw
+# OPENCLAW_CLI_PATH=
+# BDPAN_BIN=
+```
+
+说明：
+
+- 如果使用 WSL 模式，应用会自动把 Windows 路径转换成 `/mnt/c/...` / `/mnt/d/...` 形式再传给 CLI
+- 顶部 Gateway WebSocket 地址仍按 `GATEWAY_URL` 连接；只要 Windows 侧能访问到 WSL 中暴露的 Gateway 地址即可
 
 ### 方式二：直连 Anthropic API
 

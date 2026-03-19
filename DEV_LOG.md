@@ -983,6 +983,50 @@ Mac 风格主题特点：
 - `node --check renderer.js`
 - `python -m py_compile backend/cloud_sync.py backend/server.py`
 
+## 2026-03-19 补充：同时兼容 Windows 本机 CLI 与 WSL CLI
+
+用户提出希望当前应用同时兼容两类 OpenClaw / bdpan 安装方式：
+
+- Windows 本机直接安装
+- 仅在 WSL 内安装
+
+本轮实现：
+
+- 新增 [backend/command_runtime.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/command_runtime.py)，统一封装命令发现、运行模式选择和 Windows/WSL 路径转换
+- `GatewayClient` 不再只假定 `openclaw.cmd` 或 Windows `PATH`，而是支持：
+  - `OPENCLAW_CLI_MODE=auto|native|wsl`
+  - `OPENCLAW_CLI_PATH`
+  - `OPENCLAW_WSL_DISTRO`
+- `CloudSyncManager` 的 `bdpan` 发现逻辑也同步支持：
+  - `BDPAN_CLI_MODE=auto|native|wsl`
+  - `BDPAN_BIN`
+  - `BDPAN_WSL_DISTRO`
+- 当运行模式为 `wsl` 时：
+  - 调用命令会自动改为通过 `wsl.exe ...` 执行
+  - `OPENCLAW_STATE_DIR` / `OPENCLAW_CONFIG_PATH` 这类路径会自动转换为 WSL 可读路径
+  - 文件夹上传、本地目录参数、定时任务 prompt 中的本地路径都会自动转成 `/mnt/<drive>/...`
+- 这样当前的这些能力都能在 WSL CLI 模式下继续工作：
+  - Gateway 本地配对审批
+  - `openclaw cron add/list/rm/status`
+  - `bdpan whoami`
+  - `bdpan upload`
+
+涉及文件：
+
+- [backend/command_runtime.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/command_runtime.py)
+- [backend/gateway_client.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/gateway_client.py)
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [.env.example](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/.env.example)
+
+本轮验证：
+
+- `python -m py_compile backend/command_runtime.py backend/gateway_client.py backend/cloud_sync.py backend/server.py`
+- 本机环境自检：
+  - 当前解析结果为 Windows native 模式
+  - 路径转换样例 `D:\Work\Demo -> /mnt/d/Work/Demo`
+  - 路径转换样例 `\\wsl$\Ubuntu\home\lipei\project -> /home/lipei/project`
+
 ---
 
 ## 十四、2026-03-19 补充：百度网盘模块与顶部状态

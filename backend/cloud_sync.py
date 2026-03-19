@@ -2,15 +2,16 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 try:
+    from command_runtime import CommandRuntime
     from gateway_client import GatewayClient
 except ImportError:  # pragma: no cover - fallback for root-level imports
+    from backend.command_runtime import CommandRuntime
     from backend.gateway_client import GatewayClient
 
 
@@ -23,7 +24,14 @@ class CloudSyncManager:
         self.gateway_client = GatewayClient()
         self.timeout_seconds = max(self.gateway_client.timeout, 60)
         self.openclaw_cli_path = self.gateway_client.openclaw_cli_path
-        self.bdpan_cli_path = self._resolve_bdpan_cli_path()
+        self.bdpan_runtime = CommandRuntime.resolve(
+            command_name="bdpan",
+            env_path_var="BDPAN_BIN",
+            mode_env_var="BDPAN_CLI_MODE",
+            distro_env_var="BDPAN_WSL_DISTRO",
+            windows_fallbacks=self._build_bdpan_native_fallbacks(),
+        )
+        self.bdpan_cli_path = self.bdpan_runtime.display_path
         self.default_timezone = (
             os.getenv("OPENCLAW_SYNC_TZ", "Asia/Shanghai").strip() or "Asia/Shanghai"
         )
@@ -126,7 +134,7 @@ class CloudSyncManager:
             (timezone or self.default_timezone).strip() or self.default_timezone
         )
 
-        if not self.openclaw_cli_path:
+        if not self.gateway_client.openclaw_runtime.available:
             return {
                 "success": False,
                 "error": "OpenClaw CLI was not found, so scheduled sync jobs cannot be created.",
@@ -160,8 +168,7 @@ class CloudSyncManager:
             scheduled=True,
         )
 
-        command = [
-            str(self.openclaw_cli_path),
+        command_args = [
             "cron",
             "add",
             "--json",
@@ -189,18 +196,12 @@ class CloudSyncManager:
         ]
 
         if self.gateway_client.gateway_token:
-            command.extend(["--token", self.gateway_client.gateway_token])
+            command_args.extend(["--token", self.gateway_client.gateway_token])
 
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+            result = self.gateway_client.run_openclaw_cli(
+                command_args,
                 timeout=max(self.timeout_seconds, 90),
-                env=self._build_openclaw_command_env(),
-                check=False,
             )
         except Exception as exc:
             return {
@@ -249,14 +250,13 @@ class CloudSyncManager:
                 "error": f"Scheduled job was not found: {normalized_job_id}",
             }
 
-        if not self.openclaw_cli_path:
+        if not self.gateway_client.openclaw_runtime.available:
             return {
                 "success": False,
                 "error": "OpenClaw CLI was not found, so scheduled sync jobs cannot be removed.",
             }
 
-        command = [
-            str(self.openclaw_cli_path),
+        command_args = [
             "cron",
             "rm",
             "--json",
@@ -265,18 +265,12 @@ class CloudSyncManager:
             self.gateway_client.ws_url,
         ]
         if self.gateway_client.gateway_token:
-            command.extend(["--token", self.gateway_client.gateway_token])
+            command_args.extend(["--token", self.gateway_client.gateway_token])
 
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+            result = self.gateway_client.run_openclaw_cli(
+                command_args,
                 timeout=max(self.timeout_seconds, 30),
-                env=self._build_openclaw_command_env(),
-                check=False,
             )
         except Exception as exc:
             return {
@@ -403,9 +397,11 @@ class CloudSyncManager:
 
     def _to_bdpan_cli_local_path(self, folder_path: str) -> str:
         normalized = os.path.abspath(folder_path)
-        if normalized.endswith(os.sep):
-            return normalized
-        return normalized + os.sep
+        translated = self.bdpan_runtime.translate_path(normalized)
+        separator = "/" if self.bdpan_runtime.mode == "wsl" else os.sep
+        if translated.endswith(separator):
+            return translated
+        return translated + separator
 
     def _build_upload_prompt(self, folder_path: str, remote_path: str, *, scheduled: bool) -> str:
         mode_note = (
@@ -424,7 +420,7 @@ class CloudSyncManager:
 
 硬性要求：
 1. 必须使用 bdpan-storage skill，不要改用其他上传方案。
-2. 本地文件夹路径：{folder_path}
+2. 本地文件夹路径：{cli_local_path}
 3. 目标网盘相对路径：{remote_path}
 4. 这是文件夹上传，请严格按 bdpan-storage 的文件夹上传规则处理。
 5. 优先直接执行等价命令：bdpan upload "{cli_local_path}" "{cli_remote_path}"
@@ -506,21 +502,14 @@ class CloudSyncManager:
         }
 
     def _run_bdpan_upload(self, folder_path: str, remote_path: str) -> Dict[str, Any]:
-        command = [
-            str(self.bdpan_cli_path),
-            "upload",
-            self._to_bdpan_cli_local_path(folder_path),
-            self._to_bdpan_cli_remote_path(remote_path),
-            "--json",
-        ]
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        result = self._run_bdpan_cli(
+            [
+                "upload",
+                self._to_bdpan_cli_local_path(folder_path),
+                self._to_bdpan_cli_remote_path(remote_path),
+                "--json",
+            ],
             timeout=max(self.timeout_seconds, 7200),
-            check=False,
         )
 
         stdout_text = (result.stdout or "").strip()
@@ -547,7 +536,7 @@ class CloudSyncManager:
         }
 
     def _probe_bdpan_status(self) -> Dict[str, Any]:
-        if not self.bdpan_cli_path:
+        if not self.bdpan_runtime.available:
             return {
                 "installed": False,
                 "authenticated": False,
@@ -555,21 +544,13 @@ class CloudSyncManager:
             }
 
         try:
-            result = subprocess.run(
-                [str(self.bdpan_cli_path), "whoami", "--json"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=20,
-                check=False,
-            )
+            result = self._run_bdpan_cli(["whoami", "--json"], timeout=20)
         except Exception as exc:
             return {
                 "installed": True,
                 "authenticated": False,
                 "detail": f"Failed to query bdpan login status: {exc}",
-                "path": str(self.bdpan_cli_path),
+                "path": self.bdpan_cli_path,
             }
 
         if result.returncode != 0:
@@ -580,7 +561,7 @@ class CloudSyncManager:
                 "installed": True,
                 "authenticated": False,
                 "detail": error_text,
-                "path": str(self.bdpan_cli_path),
+                "path": self.bdpan_cli_path,
             }
 
         payload = self._parse_json_text(result.stdout)
@@ -592,11 +573,11 @@ class CloudSyncManager:
             "expires_at": str(payload.get("expires_at") or "").strip(),
             "token_expires_in": str(payload.get("token_expires_in") or "").strip(),
             "detail": "bdpan login status loaded.",
-            "path": str(self.bdpan_cli_path),
+            "path": self.bdpan_cli_path,
         }
 
     def _probe_cron_status(self) -> Dict[str, Any]:
-        if not self.openclaw_cli_path:
+        if not self.gateway_client.openclaw_runtime.available:
             return {
                 "available": False,
                 "enabled": False,
@@ -604,8 +585,7 @@ class CloudSyncManager:
             }
 
         try:
-            command = [
-                str(self.openclaw_cli_path),
+            command_args = [
                 "cron",
                 "status",
                 "--json",
@@ -613,18 +593,9 @@ class CloudSyncManager:
                 self.gateway_client.ws_url,
             ]
             if self.gateway_client.gateway_token:
-                command.extend(["--token", self.gateway_client.gateway_token])
+                command_args.extend(["--token", self.gateway_client.gateway_token])
 
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=20,
-                env=self._build_openclaw_command_env(),
-                check=False,
-            )
+            result = self.gateway_client.run_openclaw_cli(command_args, timeout=20)
         except Exception as exc:
             return {
                 "available": True,
@@ -652,12 +623,11 @@ class CloudSyncManager:
         }
 
     def _list_managed_jobs(self) -> List[Dict[str, Any]]:
-        if not self.openclaw_cli_path:
+        if not self.gateway_client.openclaw_runtime.available:
             return []
 
         try:
-            command = [
-                str(self.openclaw_cli_path),
+            command_args = [
                 "cron",
                 "list",
                 "--json",
@@ -665,18 +635,9 @@ class CloudSyncManager:
                 self.gateway_client.ws_url,
             ]
             if self.gateway_client.gateway_token:
-                command.extend(["--token", self.gateway_client.gateway_token])
+                command_args.extend(["--token", self.gateway_client.gateway_token])
 
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=20,
-                env=self._build_openclaw_command_env(),
-                check=False,
-            )
+            result = self.gateway_client.run_openclaw_cli(command_args, timeout=20)
         except Exception:
             return []
 
@@ -805,24 +766,10 @@ class CloudSyncManager:
             timespec="seconds",
         )
 
-    def _build_openclaw_command_env(self) -> Dict[str, str]:
-        env = os.environ.copy()
-        if self.gateway_client.openclaw_config_path:
-            env["OPENCLAW_CONFIG_PATH"] = self.gateway_client.openclaw_config_path
-        return env
-
-    def _resolve_bdpan_cli_path(self) -> Optional[Path]:
-        raw_env_path = os.getenv("BDPAN_BIN", "").strip()
-        if raw_env_path:
-            candidate = Path(raw_env_path)
-            if candidate.exists():
-                return candidate
-
-        cli_from_path = shutil.which("bdpan")
-        if cli_from_path:
-            return Path(cli_from_path)
-
+    def _build_bdpan_native_fallbacks(self) -> List[Path]:
         home_dir = Path.home()
+        candidates = []
+
         current_version_file = home_dir / ".local" / "bdpan" / "current-version"
         if current_version_file.exists():
             try:
@@ -832,17 +779,37 @@ class CloudSyncManager:
 
             if version:
                 version_dir = home_dir / ".local" / "bdpan" / "versions" / version
-                for candidate_name in ("bdpan.exe", "bdpan"):
-                    candidate = version_dir / candidate_name
-                    if candidate.exists():
-                        return candidate
+                candidates.extend(
+                    [
+                        version_dir / "bdpan.exe",
+                        version_dir / "bdpan",
+                    ]
+                )
 
-        fallback_candidates = [
-            home_dir / ".local" / "bin" / "bdpan",
-            home_dir / ".local" / "bin" / "bdpan.exe",
-        ]
-        for candidate in fallback_candidates:
-            if candidate.exists():
-                return candidate
+        candidates.extend(
+            [
+                home_dir / ".local" / "bin" / "bdpan",
+                home_dir / ".local" / "bin" / "bdpan.exe",
+            ]
+        )
+        return candidates
 
-        return None
+    def _run_bdpan_cli(
+        self,
+        args: List[str],
+        *,
+        timeout: int,
+    ):
+        if not self.bdpan_runtime.available:
+            raise RuntimeError("bdpan CLI is unavailable")
+
+        return subprocess.run(
+            self.bdpan_runtime.build_command(args),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            env=self.bdpan_runtime.build_env(),
+            check=False,
+        )

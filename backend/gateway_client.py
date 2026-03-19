@@ -2,7 +2,6 @@ import base64
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import time
 import uuid
@@ -16,6 +15,11 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption
 from dotenv import load_dotenv
 from websocket import WebSocketTimeoutException
+
+try:
+    from command_runtime import CommandRuntime
+except ImportError:  # pragma: no cover - fallback for root-level imports
+    from backend.command_runtime import CommandRuntime
 
 load_dotenv()
 
@@ -45,9 +49,18 @@ class GatewayClient:
         self.auto_approve_pairing = (
             os.getenv("GATEWAY_AUTO_APPROVE_LOCAL_PAIRING", "true").lower() == "true"
         )
-        self.openclaw_cli_path = self._resolve_openclaw_cli_path()
+        self.openclaw_runtime = CommandRuntime.resolve(
+            command_name="openclaw",
+            env_path_var="OPENCLAW_CLI_PATH",
+            mode_env_var="OPENCLAW_CLI_MODE",
+            distro_env_var="OPENCLAW_WSL_DISTRO",
+            windows_fallbacks=[
+                Path.home() / "AppData" / "Roaming" / "npm" / "openclaw.cmd",
+            ],
+        )
+        self.openclaw_cli_path = self.openclaw_runtime.display_path
         self.openclaw_config_path = os.getenv("OPENCLAW_CONFIG_PATH", "").strip()
-        if not self.openclaw_config_path:
+        if not self.openclaw_config_path and self.openclaw_runtime.mode == "native":
             self.openclaw_config_path = str(Path.home() / ".openclaw" / "openclaw.json")
 
         raw_state_dir = os.getenv("GATEWAY_STATE_DIR", "").strip()
@@ -242,7 +255,9 @@ class GatewayClient:
             "auto_approve_pairing": self.auto_approve_pairing,
             "has_token": bool(self.gateway_token),
             "has_password": bool(self.gateway_password),
-            "has_cli": bool(self.openclaw_cli_path),
+            "has_cli": self.openclaw_runtime.available,
+            "cli_mode": self.openclaw_runtime.mode,
+            "cli_path": self.openclaw_cli_path,
             "available": self.check_gateway_available() if self.use_gateway else None,
             "connection_probe": self.probe_gateway_connection() if self.use_gateway else None,
             "chat_probe": self.probe_chat_capability() if self.use_gateway else None,
@@ -250,7 +265,7 @@ class GatewayClient:
 
     def approve_local_pairing(self) -> Dict[str, Any]:
         """Approve the pending pairing request for the current workspace device."""
-        if not self.openclaw_cli_path:
+        if not self.openclaw_runtime.available:
             return {
                 "ok": False,
                 "detail": "OpenClaw CLI was not found, so local pairing approval is unavailable.",
@@ -275,8 +290,7 @@ class GatewayClient:
                 ),
             }
 
-        command = [
-            str(self.openclaw_cli_path),
+        command_args = [
             "devices",
             "approve",
             match["requestId"],
@@ -285,19 +299,12 @@ class GatewayClient:
             self.ws_url,
         ]
         if self.gateway_token:
-            command.extend(["--token", self.gateway_token])
+            command_args.extend(["--token", self.gateway_token])
         if self.gateway_password:
-            command.extend(["--password", self.gateway_password])
+            command_args.extend(["--password", self.gateway_password])
 
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                env=self._build_openclaw_cli_env(),
-                check=False,
-            )
+            result = self.run_openclaw_cli(command_args, timeout=self.timeout)
         except Exception as exc:
             return {"ok": False, "detail": f"OpenClaw CLI approval failed: {exc}"}
 
@@ -596,23 +603,6 @@ class GatewayClient:
         except Exception:
             pass
 
-    def _resolve_openclaw_cli_path(self) -> Optional[Path]:
-        raw_cli_path = os.getenv("OPENCLAW_CLI_PATH", "").strip()
-        if raw_cli_path:
-            cli_path = Path(raw_cli_path)
-            if cli_path.exists():
-                return cli_path
-
-        cli_from_path = shutil.which("openclaw")
-        if cli_from_path:
-            return Path(cli_from_path)
-
-        windows_cli = Path.home() / "AppData" / "Roaming" / "npm" / "openclaw.cmd"
-        if windows_cli.exists():
-            return windows_cli
-
-        return None
-
     def _run_with_pairing_retry(self, operation: Callable[[], Any]) -> Any:
         last_error: Optional[Exception] = None
 
@@ -837,30 +827,48 @@ class GatewayClient:
     def _base64url_encode(self, payload: bytes) -> str:
         return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
-    def _build_openclaw_cli_env(self) -> Dict[str, str]:
-        env = os.environ.copy()
-        env["OPENCLAW_STATE_DIR"] = str(self.state_dir)
+    def _build_openclaw_cli_env_vars(self) -> Dict[str, str]:
+        env_vars = {
+            "OPENCLAW_STATE_DIR": self.openclaw_runtime.translate_path(str(self.state_dir)),
+        }
         if self.openclaw_config_path:
-            env["OPENCLAW_CONFIG_PATH"] = self.openclaw_config_path
-        return env
+            env_vars["OPENCLAW_CONFIG_PATH"] = self.openclaw_runtime.translate_path(
+                self.openclaw_config_path
+            )
+        return env_vars
+
+    def run_openclaw_cli(
+        self,
+        args: List[str],
+        *,
+        timeout: Optional[int] = None,
+    ):
+        if not self.openclaw_runtime.available:
+            raise RuntimeError("OpenClaw CLI is unavailable")
+
+        return subprocess.run(
+            self.openclaw_runtime.build_command(
+                args,
+                extra_env=self._build_openclaw_cli_env_vars(),
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout or self.timeout,
+            env=self.openclaw_runtime.build_env(),
+            check=False,
+        )
 
     def _list_pending_pairing_requests(self) -> Dict[str, Any]:
-        if not self.openclaw_cli_path:
+        if not self.openclaw_runtime.available:
             return {
                 "ok": False,
                 "detail": "OpenClaw CLI was not found, so pairing requests cannot be inspected.",
             }
 
-        command = [str(self.openclaw_cli_path), "devices", "list", "--json"]
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                env=self._build_openclaw_cli_env(),
-                check=False,
-            )
+            result = self.run_openclaw_cli(["devices", "list", "--json"], timeout=self.timeout)
         except Exception as exc:
             return {"ok": False, "detail": f"OpenClaw CLI pairing list failed: {exc}"}
 
