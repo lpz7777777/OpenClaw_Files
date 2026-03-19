@@ -100,7 +100,6 @@ const state = {
  */
 const selectFolderBtn = document.getElementById("selectFolderBtn"); // 选择文件夹按钮
 const analyzeBtn = document.getElementById("analyzeBtn"); // 分析按钮
-const wechatCleanBtn = document.getElementById("wechatCleanBtn"); // 微信文件整理按钮
 const themeSelect = document.getElementById("themeSelect"); // 主题选择器
 const themeDescription = document.getElementById("themeDescription"); // 主题描述
 const selectedPath = document.getElementById("selectedPath"); // 选中路径显示
@@ -182,13 +181,6 @@ selectFolderBtn.addEventListener("click", async () => {
     }
 
     await openFolder(folderPath);
-});
-
-/**
- * 微信文件整理按钮点击事件
- */
-wechatCleanBtn.addEventListener("click", async () => {
-    await handleWechatCleanup();
 });
 
 /**
@@ -311,98 +303,6 @@ cancelBtn.addEventListener("click", () => {
     renderEditor();
     updateActionState();
 });
-
-/**
- * 处理微信文件整理
- */
-async function handleWechatCleanup() {
-    // 1. 询问用户是否要打开微信目录查看
-    const openFirst = window.confirm(
-        "是否先打开微信存储目录查看？\n\n点击「确定」打开目录查看，\n点击「取消」直接开始扫描并生成整理建议。"
-    );
-
-    if (openFirst) {
-        // 打开微信目录
-        try {
-            const response = await axios.post(`${API_BASE}/wechat/open`, {});
-            if (response.data.success) {
-                const wechatPath = response.data.path;
-                // 使用系统默认方式打开文件夹
-                await ipcRenderer.invoke("open-folder", wechatPath);
-                // 等待用户查看后再继续
-                const proceed = window.confirm(
-                    "已在资源管理器中打开微信存储目录。\n\n查看完毕后点击「确定」继续扫描并生成整理建议。"
-                );
-                if (!proceed) {
-                    return;
-                }
-            } else {
-                alert(`打开微信目录失败：${response.data.error}`);
-                return;
-            }
-        } catch (error) {
-            alert(`打开微信目录失败：${error.message}`);
-            return;
-        }
-    }
-
-    // 2. 让用户选择目标文件夹
-    const targetFolder = await ipcRenderer.invoke("select-folder");
-    if (!targetFolder) {
-        return;
-    }
-
-    // 3. 扫描微信文件并生成整理计划
-    state.isAnalyzing = true;
-    setAnalysisStatus("loading", "正在扫描微信文件，请稍候...");
-    renderAnalysis();
-    updateActionState();
-
-    try {
-        const response = await axios.post(`${API_BASE}/wechat/scan`, {
-            target_folder: targetFolder,
-        });
-
-        if (response.data.success) {
-            // 扫描成功，显示结果
-            const plan = response.data.plan;
-            const stats = response.data.scan_stats;
-
-            // 设置当前计划
-            state.currentPlan = {
-                categories: plan.categories,
-                operations: plan.operations,
-                summary: plan.summary,
-                summary_points: plan.summary_points,
-                source: "wechat",
-                wechat_stats: stats,
-                wechat_path: response.data.wechat_path,
-            };
-
-            setAnalysisStatus(
-                "success",
-                `扫描完成！发现 ${stats.total_files} 个微信文件，${plan.stats.duplicates} 个重复文件。请确认整理建议。`
-            );
-
-            // 打开概览标签
-            openOverviewTab();
-
-            // 刷新文件树（显示目标文件夹）
-            if (state.currentFolderPath) {
-                await loadFolderTree(state.currentFolderPath, true);
-            }
-        } else {
-            setAnalysisStatus("error", `扫描失败：${response.data.error}`);
-        }
-    } catch (error) {
-        setAnalysisStatus("error", `无法连接到后端服务：${error.message}`);
-    }
-
-    state.isAnalyzing = false;
-    renderAnalysis();
-    renderEditor();
-    updateActionState();
-}
 
 async function openFolder(folderPath) {
     state.currentFolderPath = folderPath;
@@ -809,53 +709,25 @@ function renderOverviewDocument() {
     const summaryMarkup = renderSummaryMarkup(state.currentPlan);
     const categories = Array.isArray(state.currentPlan?.categories) ? state.currentPlan.categories : [];
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
-    const isWechatPlan = state.currentPlan?.source === "wechat";
 
     return `
         <div class="document-shell">
             <div class="document-header">
                 <div>
-                    <p class="document-kicker">${isWechatPlan ? "WeChat Cleanup" : "Folder Overview"}</p>
-                    <h3>${escapeHtml(isWechatPlan ? "微信文件整理" : path.basename(state.currentFolderPath) || state.currentFolderPath)}</h3>
+                    <p class="document-kicker">Folder Overview</p>
+                    <h3>${escapeHtml(path.basename(state.currentFolderPath) || state.currentFolderPath)}</h3>
                 </div>
                 <div class="document-meta">
-                    ${isWechatPlan
-                        ? `
-                        <span>${state.currentPlan.wechat_stats?.total_files || 0} 个文件</span>
-                        <span>${state.currentPlan.plan?.stats?.duplicates || 0} 个重复</span>
-                        <span>${formatBytes(state.currentPlan.wechat_stats?.total_size || 0)}</span>
-                    `
-                        : `
-                        <span>${state.treeStats.folders} folders</span>
-                        <span>${state.treeStats.files} files</span>
-                        <span>${formatBytes(state.treeStats.totalSize)}</span>
-                    `}
+                    <span>${state.treeStats.folders} folders</span>
+                    <span>${state.treeStats.files} files</span>
+                    <span>${formatBytes(state.treeStats.totalSize)}</span>
                 </div>
             </div>
-
-            ${isWechatPlan
-                ? `
-            <div class="wechat-info-card">
-                <p><strong>微信路径：</strong><code>${escapeHtml(state.currentPlan.wechat_path || "")}</code></p>
-                <p><strong>整理目标：</strong><code>${escapeHtml(state.currentFolderPath || "")}</code></p>
-            </div>
-        `
-                : ""}
 
             <div class="overview-grid">
                 <article class="overview-card">
-                    <h4>${isWechatPlan ? "扫描统计" : "当前目录"}</h4>
-                    ${isWechatPlan
-                        ? `
-                        <ul class="stats-list">
-                            <li>总文件数：${state.currentPlan.wechat_stats?.total_files || 0}</li>
-                            <li>重复文件：${state.currentPlan.plan?.stats?.duplicates || 0}</li>
-                            <li>总大小：${formatBytes(state.currentPlan.wechat_stats?.total_size || 0)}</li>
-                        </ul>
-                    `
-                        : `
-                        <p class="mono subtle">${escapeHtml(state.currentFolderPath || "")}</p>
-                    `}
+                    <h4>当前目录</h4>
+                    <p class="mono subtle">${escapeHtml(state.currentFolderPath || "")}</p>
                 </article>
 
                 <article class="overview-card">
