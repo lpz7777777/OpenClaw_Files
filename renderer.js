@@ -1,51 +1,67 @@
-const { ipcRenderer } = require("electron");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-const mammoth = require("mammoth");
-const XLSX = require("xlsx");
+/**
+ * OpenClaw Files 前端渲染逻辑
+ * 负责界面交互、文件预览、分析结果展示、百度网盘同步等功能
+ */
 
-const API_BASE = "http://localhost:8765";
-const PREVIEW_BYTE_LIMIT = 200 * 1024;
-const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
-const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
-const THEME_STORAGE_KEY = "openclaw-workspace-theme";
+// 引入依赖
+const { ipcRenderer } = require("electron"); // Electron 进程间通信
+const axios = require("axios"); // HTTP 请求
+const fs = require("fs"); // 文件系统操作
+const path = require("path"); // 路径处理
+const mammoth = require("mammoth"); // Word 文档解析
+const XLSX = require("xlsx"); // Excel 表格解析
+
+/**
+ * 常量定义
+ */
+const API_BASE = "http://localhost:8765"; // 后端 API 基础地址
+const PREVIEW_BYTE_LIMIT = 200 * 1024; // 文件预览大小限制（200KB）
+const WORD_EXTENSIONS = new Set([".doc", ".docx"]); // Word 文档扩展名
+const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]); // Excel 表格扩展名
+const THEME_STORAGE_KEY = "openclaw-workspace-theme"; // 主题存储键名
+
+/**
+ * 主题定义
+ */
 const THEME_DEFINITIONS = [
     {
         id: "workspace",
-        label: "雾杉工作台",
+        label: "雾杉",
         description: "暖纸质感、沉稳配色，适合长时间整理文件。",
     },
     {
         id: "mac",
-        label: "晴空果冻窗",
+        label: "晴空",
         description: "明亮玻璃感和轻盈高光，保留 macOS 风格气质。",
     },
     {
         id: "fjord",
-        label: "北岸蓝图",
+        label: "北岸",
         description: "冷静蓝灰与工程线稿感，适合偏技术型工作流。",
     },
     {
         id: "amber",
-        label: "琥珀纸境",
+        label: "琥珀",
         description: "奶油纸页和琥珀点缀，像在桌面上整理实体档案。",
     },
     {
         id: "sage",
-        label: "雨后庭院",
+        label: "雨后",
         description: "低饱和绿调与柔雾背景，视觉更松弛。",
     },
     {
         id: "petal",
-        label: "珊瑚晨雾",
+        label: "珊瑚",
         description: "柔和珊瑚色和清晨云雾感，页面更有呼吸感。",
     },
 ];
-const THEMES = new Set(THEME_DEFINITIONS.map((theme) => theme.id));
-const DEFAULT_THEME = "workspace";
-const DEFAULT_BDPAN_DAILY_TIME = "02:00";
+const THEMES = new Set(THEME_DEFINITIONS.map((theme) => theme.id)); // 主题 ID 集合
+const DEFAULT_THEME = "workspace"; // 默认主题
+const DEFAULT_BDPAN_DAILY_TIME = "02:00"; // 默认百度网盘同步时间
 
+/**
+ * 应用状态管理
+ */
 const state = {
     currentFolderPath: null,
     currentPlan: null,
@@ -79,46 +95,58 @@ const state = {
     isCloudSyncLoading: false,
 };
 
-const selectFolderBtn = document.getElementById("selectFolderBtn");
-const analyzeBtn = document.getElementById("analyzeBtn");
-const themeSelect = document.getElementById("themeSelect");
-const themeDescription = document.getElementById("themeDescription");
-const selectedPath = document.getElementById("selectedPath");
-const explorerStats = document.getElementById("explorerStats");
-const explorerTree = document.getElementById("explorerTree");
-const tabStrip = document.getElementById("tabStrip");
-const editorMeta = document.getElementById("editorMeta");
-const editorContent = document.getElementById("editorContent");
-const analysisStatus = document.getElementById("analysisStatus");
-const analysisMeta = document.getElementById("analysisMeta");
-const planSummary = document.getElementById("planSummary");
-const categoriesList = document.getElementById("categoriesList");
-const operationsMeta = document.getElementById("operationsMeta");
-const operationsList = document.getElementById("operationsList");
-const resultDisplay = document.getElementById("resultDisplay");
-const gatewayStatusPill = document.getElementById("gatewayStatusPill");
-const gatewayStatusText = document.getElementById("gatewayStatusText");
-const topbarJobsChips = document.getElementById("topbarJobsChips");
-const bdpanMeta = document.getElementById("bdpanMeta");
-const bdpanStatusCard = document.getElementById("bdpanStatusCard");
-const bdpanRemotePathInput = document.getElementById("bdpanRemotePathInput");
-const bdpanUploadBtn = document.getElementById("bdpanUploadBtn");
-const bdpanRefreshBtn = document.getElementById("bdpanRefreshBtn");
-const bdpanDailyTimeInput = document.getElementById("bdpanDailyTimeInput");
-const bdpanTimezoneInput = document.getElementById("bdpanTimezoneInput");
-const bdpanScheduleBtn = document.getElementById("bdpanScheduleBtn");
-const bdpanJobsList = document.getElementById("bdpanJobsList");
-const confirmBtn = document.getElementById("confirmBtn");
-const newAnalysisBtn = document.getElementById("newAnalysisBtn");
-const rollbackBtn = document.getElementById("rollbackBtn");
-const cancelBtn = document.getElementById("cancelBtn");
+/**
+ * DOM 元素引用
+ */
+const selectFolderBtn = document.getElementById("selectFolderBtn"); // 选择文件夹按钮
+const analyzeBtn = document.getElementById("analyzeBtn"); // 分析按钮
+const themeSelect = document.getElementById("themeSelect"); // 主题选择器
+const themeDescription = document.getElementById("themeDescription"); // 主题描述
+const selectedPath = document.getElementById("selectedPath"); // 选中路径显示
+const explorerStats = document.getElementById("explorerStats"); // 资源管理器统计
+const explorerTree = document.getElementById("explorerTree"); // 资源管理器树
+const tabStrip = document.getElementById("tabStrip"); // 标签栏
+const editorMeta = document.getElementById("editorMeta"); // 编辑器元信息
+const editorContent = document.getElementById("editorContent"); // 编辑器内容
+const analysisStatus = document.getElementById("analysisStatus"); // 分析状态
+const analysisMeta = document.getElementById("analysisMeta"); // 分析元信息
+const planSummary = document.getElementById("planSummary"); // 计划摘要
+const categoriesList = document.getElementById("categoriesList"); // 分类列表
+const operationsMeta = document.getElementById("operationsMeta"); // 操作元信息
+const operationsList = document.getElementById("operationsList"); // 操作列表
+const resultDisplay = document.getElementById("resultDisplay"); // 结果显示
+const gatewayStatusPill = document.getElementById("gatewayStatusPill"); // Gateway 状态胶囊
+const gatewayStatusText = document.getElementById("gatewayStatusText"); // Gateway 状态文本
+const topbarJobsChips = document.getElementById("topbarJobsChips"); // 顶部任务芯片
+const bdpanMeta = document.getElementById("bdpanMeta"); // 百度网盘元信息
+const bdpanStatusCard = document.getElementById("bdpanStatusCard"); // 百度网盘状态卡片
+const bdpanRemotePathInput = document.getElementById("bdpanRemotePathInput"); // 百度网盘远程路径输入
+const bdpanUploadBtn = document.getElementById("bdpanUploadBtn"); // 百度网盘上传按钮
+const bdpanRefreshBtn = document.getElementById("bdpanRefreshBtn"); // 百度网盘刷新按钮
+const bdpanDailyTimeInput = document.getElementById("bdpanDailyTimeInput"); // 百度网盘每日时间输入
+const bdpanTimezoneInput = document.getElementById("bdpanTimezoneInput"); // 百度网盘时区输入
+const bdpanScheduleBtn = document.getElementById("bdpanScheduleBtn"); // 百度网盘调度按钮
+const bdpanJobsList = document.getElementById("bdpanJobsList"); // 百度网盘任务列表
+const confirmBtn = document.getElementById("confirmBtn"); // 确认按钮
+const newAnalysisBtn = document.getElementById("newAnalysisBtn"); // 重新分析按钮
+const rollbackBtn = document.getElementById("rollbackBtn"); // 回滚按钮
+const cancelBtn = document.getElementById("cancelBtn"); // 取消按钮
 
+/**
+ * 初始化主题选项
+ */
 renderThemeOptions();
 
+/**
+ * 主题选择事件监听
+ */
 themeSelect.addEventListener("change", (event) => {
     applyTheme(event.target.value);
 });
 
+/**
+ * 百度网盘远程路径输入事件监听
+ */
 bdpanRemotePathInput.addEventListener("input", (event) => {
     state.bdpanRemotePath = event.target.value;
     state.bdpanRemotePathEdited = true;
@@ -126,17 +154,26 @@ bdpanRemotePathInput.addEventListener("input", (event) => {
     updateActionState();
 });
 
+/**
+ * 百度网盘每日时间输入事件监听
+ */
 bdpanDailyTimeInput.addEventListener("input", (event) => {
     state.bdpanDailyTime = event.target.value;
     updateActionState();
 });
 
+/**
+ * 百度网盘时区输入事件监听
+ */
 bdpanTimezoneInput.addEventListener("input", (event) => {
     state.bdpanTimezone = event.target.value;
     state.bdpanTimezoneEdited = true;
     updateActionState();
 });
 
+/**
+ * 选择文件夹按钮点击事件
+ */
 selectFolderBtn.addEventListener("click", async () => {
     const folderPath = await ipcRenderer.invoke("select-folder");
     if (!folderPath) {
@@ -146,6 +183,9 @@ selectFolderBtn.addEventListener("click", async () => {
     await openFolder(folderPath);
 });
 
+/**
+ * 分析按钮点击事件
+ */
 analyzeBtn.addEventListener("click", async () => {
     if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
@@ -154,6 +194,9 @@ analyzeBtn.addEventListener("click", async () => {
     await analyzeFolder(state.currentFolderPath);
 });
 
+/**
+ * 重新分析按钮点击事件
+ */
 newAnalysisBtn.addEventListener("click", async () => {
     if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
@@ -162,6 +205,9 @@ newAnalysisBtn.addEventListener("click", async () => {
     await analyzeFolder(state.currentFolderPath);
 });
 
+/**
+ * 确认执行按钮点击事件
+ */
 confirmBtn.addEventListener("click", async () => {
     const pending = getPendingOperations();
     if (pending.length === 0) {
@@ -182,6 +228,9 @@ confirmBtn.addEventListener("click", async () => {
     );
 });
 
+/**
+ * 回滚按钮点击事件
+ */
 rollbackBtn.addEventListener("click", async () => {
     if (!state.canRollback || state.isExecutingOperation || state.isCloudSyncBusy) {
         setAnalysisStatus("error", "当前没有可回滚的操作。");
@@ -1432,6 +1481,9 @@ function updateActionState() {
     bdpanScheduleBtn.disabled = !hasFolder || isBusy || !hasRemotePath || !hasDailyTime || !hasTimezone;
 }
 
+/**
+ * 上传当前文件夹到百度网盘
+ */
 async function uploadCurrentFolderToBdpan() {
     if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
@@ -1491,6 +1543,9 @@ async function uploadCurrentFolderToBdpan() {
     }
 }
 
+/**
+ * 创建百度网盘定时同步任务
+ */
 async function createBdpanSchedule() {
     if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
@@ -1560,6 +1615,11 @@ async function createBdpanSchedule() {
     }
 }
 
+/**
+ * 取消百度网盘定时同步任务
+ * @param {string} jobId - 任务ID
+ * @param {string} jobName - 任务名称
+ */
 async function removeBdpanSchedule(jobId, jobName) {
     if (!jobId || state.isCloudSyncBusy) {
         return;
@@ -1604,6 +1664,11 @@ async function removeBdpanSchedule(jobId, jobName) {
     }
 }
 
+/**
+ * 构建云同步消息
+ * @param {Object} payload - 消息内容
+ * @returns {string} 构建后的消息
+ */
 function buildCloudSyncMessage(payload) {
     const summary = String(payload?.summary || payload?.error || "").trim();
     const remotePath = String(payload?.remote_path || "").trim();
@@ -1631,6 +1696,10 @@ function buildCloudSyncMessage(payload) {
     return parts.join(" ");
 }
 
+/**
+ * 执行单个操作
+ * @param {number} index - 操作索引
+ */
 async function executeSingleOperation(index) {
     if (state.isExecutingOperation || state.isAnalyzing || isOperationHandled(index)) {
         return;
@@ -1649,6 +1718,12 @@ async function executeSingleOperation(index) {
     await executeOperations([index], "正在执行当前确认的操作...");
 }
 
+/**
+ * 执行多个操作
+ * @param {Array<number>} indexes - 操作索引数组
+ * @param {string} loadingMessage - 加载消息
+ * @param {Object} options - 选项
+ */
 async function executeOperations(indexes, loadingMessage, options = {}) {
     const operations = indexes
         .map((index) => {
@@ -1794,6 +1869,10 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
     }
 }
 
+/**
+ * 获取待执行的操作
+ * @returns {Array} 待执行操作数组
+ */
 function getPendingOperations() {
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
     return operations
@@ -1801,6 +1880,9 @@ function getPendingOperations() {
         .filter(({ index }) => !isOperationHandled(index));
 }
 
+/**
+ * 清理不存在的标签页
+ */
 async function pruneMissingTabs() {
     const remainingTabs = [];
 
@@ -1824,6 +1906,11 @@ async function pruneMissingTabs() {
     }
 }
 
+/**
+ * 判断是否为二进制文件
+ * @param {Buffer} buffer - 文件缓冲区
+ * @returns {boolean} 是否为二进制文件
+ */
 function looksBinary(buffer) {
     if (buffer.length === 0) {
         return false;
@@ -1842,6 +1929,12 @@ function looksBinary(buffer) {
     return suspicious / buffer.length > 0.1;
 }
 
+/**
+ * 获取文件图标元数据
+ * @param {string} fileName - 文件名
+ * @param {string} extension - 文件扩展名
+ * @returns {Object} 图标元数据
+ */
 function fileIconMeta(fileName, extension) {
     const normalizedName = String(fileName || "").toLowerCase();
     const iconMap = {
@@ -1900,6 +1993,11 @@ function fileIconMeta(fileName, extension) {
     return iconMap[extension] || { label: "FILE", tone: "generic" };
 }
 
+/**
+ * 格式化字节大小
+ * @param {number} value - 字节大小
+ * @returns {string} 格式化后的字符串
+ */
 function formatBytes(value) {
     if (!Number.isFinite(value) || value <= 0) {
         return "0 B";
@@ -1917,6 +2015,11 @@ function formatBytes(value) {
     return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+/**
+ * 格式化日期时间
+ * @param {number} timestamp - 时间戳
+ * @returns {string} 格式化后的日期时间字符串
+ */
 function formatDate(timestamp) {
     if (!timestamp) {
         return "未知时间";
@@ -1927,6 +2030,11 @@ function formatDate(timestamp) {
     });
 }
 
+/**
+ * 转义HTML特殊字符
+ * @param {string} value - 要转义的字符串
+ * @returns {string} 转义后的字符串
+ */
 function escapeHtml(value) {
     return String(value)
         .replace(/&/g, "&amp;")
@@ -1936,11 +2044,18 @@ function escapeHtml(value) {
         .replace(/'/g, "&#39;");
 }
 
+/**
+ * 初始化主题
+ */
 function initializeTheme() {
     const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     applyTheme(storedTheme && THEMES.has(storedTheme) ? storedTheme : DEFAULT_THEME);
 }
 
+/**
+ * 应用主题
+ * @param {string} themeName - 主题名称
+ */
 function applyTheme(themeName) {
     const normalizedTheme = THEMES.has(themeName) ? themeName : DEFAULT_THEME;
     const theme = getThemeDefinition(normalizedTheme);
@@ -1948,24 +2063,32 @@ function applyTheme(themeName) {
     document.body.dataset.theme = normalizedTheme;
     themeSelect.value = normalizedTheme;
     localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
-    if (themeDescription) {
-        themeDescription.textContent = `${theme.label} · ${theme.description}`;
-    }
 }
 
+/**
+ * 渲染主题选项
+ */
 function renderThemeOptions() {
     themeSelect.innerHTML = THEME_DEFINITIONS.map(
         (theme) => `<option value="${theme.id}">${theme.label}</option>`
     ).join("");
 }
 
+/**
+ * 获取主题定义
+ * @param {string} themeName - 主题名称
+ * @returns {Object} 主题定义
+ */
 function getThemeDefinition(themeName) {
     return THEME_DEFINITIONS.find((theme) => theme.id === themeName) || THEME_DEFINITIONS[0];
 }
 
-initializeTheme();
-renderExplorer();
-renderEditor();
-renderAnalysis();
-updateActionState();
-loadCloudSyncStatus();
+/**
+ * 初始化应用
+ */
+initializeTheme(); // 初始化主题
+renderExplorer(); // 渲染资源管理器
+renderEditor(); // 渲染编辑器
+renderAnalysis(); // 渲染分析结果
+updateActionState(); // 更新操作状态
+loadCloudSyncStatus(); // 加载云同步状态
