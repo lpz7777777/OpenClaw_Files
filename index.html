@@ -17,6 +17,22 @@
                 </div>
             </div>
 
+            <div class="topbar-status">
+                <div class="gateway-banner">
+                    <span id="gatewayStatusPill" class="sync-status-pill neutral">Gateway 检查中</span>
+                    <span id="gatewayStatusText" class="gateway-status-text">
+                        正在检查 OpenClaw Gateway 和本应用创建的定时任务...
+                    </span>
+                </div>
+
+                <div class="topbar-jobs">
+                    <span class="topbar-jobs-label">本应用定时任务</span>
+                    <div id="topbarJobsChips" class="topbar-jobs-chips">
+                        <span class="topbar-job-chip subtle-chip">暂无任务</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="toolbar-actions">
                 <div class="theme-switcher">
                     <label class="theme-switcher-label" for="themeSelect">主题</label>
@@ -68,6 +84,71 @@
                         在左侧资源管理器中点击文件，即可像 Cursor 一样在这里打开多个文档标签页。
                     </div>
                 </div>
+
+                <section class="workspace-cloud-panel">
+                    <div class="workspace-cloud-header">
+                        <div>
+                            <p class="panel-kicker">Cloud Sync</p>
+                            <h2>百度网盘同步</h2>
+                        </div>
+                        <div id="bdpanMeta" class="panel-meta">未检查</div>
+                    </div>
+
+                    <div class="workspace-cloud-scroll">
+                        <div id="bdpanStatusCard" class="cloud-sync-status empty-inline">
+                            应用启动后，这里会显示 OpenClaw、百度网盘登录状态，以及通过本应用创建的定时同步任务。
+                        </div>
+
+                        <div class="cloud-sync-form">
+                            <label class="field-group">
+                                <span>网盘目标路径</span>
+                                <input
+                                    id="bdpanRemotePathInput"
+                                    class="text-input"
+                                    type="text"
+                                    placeholder="例如 backups/my-folder/"
+                                >
+                                <small>相对 `/apps/bdpan/`，上传文件夹时建议以 `/` 结尾。</small>
+                            </label>
+
+                            <div class="cloud-sync-actions">
+                                <button id="bdpanUploadBtn" class="secondary-btn">上传到百度网盘</button>
+                                <button id="bdpanRefreshBtn" class="ghost-btn">刷新状态</button>
+                            </div>
+
+                            <div class="cloud-sync-grid">
+                                <label class="field-group">
+                                    <span>每日同步时间</span>
+                                    <input
+                                        id="bdpanDailyTimeInput"
+                                        class="text-input"
+                                        type="time"
+                                    >
+                                    <small>每天按这个时间触发一次自动同步。</small>
+                                </label>
+
+                                <label class="field-group">
+                                    <span>时区</span>
+                                    <input
+                                        id="bdpanTimezoneInput"
+                                        class="text-input"
+                                        type="text"
+                                        placeholder="Asia/Shanghai"
+                                    >
+                                    <small>会传给 `openclaw cron add --tz`。</small>
+                                </label>
+                            </div>
+
+                            <div class="cloud-sync-actions">
+                                <button id="bdpanScheduleBtn" class="primary-btn">创建每日同步</button>
+                            </div>
+
+                            <div id="bdpanJobsList" class="bdpan-jobs empty-inline">
+                                暂无由当前应用创建的百度网盘同步任务。
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </section>
 
             <aside class="panel analysis-panel">
@@ -120,6 +201,7 @@
                             尚未执行任何文件操作。
                         </div>
                     </section>
+
                 </div>
 
                 <div class="action-buttons">

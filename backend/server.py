@@ -1,11 +1,13 @@
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from cloud_sync import CloudSyncManager
 from file_analyzer import FileAnalyzer
 
 
 class RequestHandler(BaseHTTPRequestHandler):
     analyzer = None
+    cloud_sync_manager = None
     current_backup = None
 
     def _set_headers(self, status=200):
@@ -30,11 +32,23 @@ class RequestHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             return None, str(exc)
 
+    @classmethod
+    def get_cloud_sync_manager(cls):
+        if cls.cloud_sync_manager is not None:
+            return cls.cloud_sync_manager, None
+
+        try:
+            cls.cloud_sync_manager = CloudSyncManager()
+            return cls.cloud_sync_manager, None
+        except Exception as exc:
+            return None, str(exc)
+
     def do_POST(self):
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
         data = json.loads(post_data.decode("utf-8"))
         analyzer, analyzer_error = self.get_analyzer()
+        cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
 
         if self.path == "/analyze":
             if analyzer_error:
@@ -100,6 +114,96 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = {"success": False, "error": "没有可回退的操作"}
 
             self._set_headers()
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/cloud/status":
+            if cloud_sync_error:
+                self._set_headers(500)
+                self.wfile.write(
+                    json.dumps(
+                        {"success": False, "error": cloud_sync_error},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                return
+
+            result = cloud_sync_manager.get_status()
+            self._set_headers()
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/cloud/upload":
+            if cloud_sync_error:
+                self._set_headers(500)
+                self.wfile.write(
+                    json.dumps(
+                        {"success": False, "error": cloud_sync_error},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                return
+
+            folder_path = data.get("folder_path")
+            remote_path = data.get("remote_path")
+            try:
+                result = cloud_sync_manager.upload_folder(folder_path, remote_path)
+            except Exception as exc:
+                result = {"success": False, "error": str(exc)}
+
+            self._set_headers(200 if result.get("success") else 400)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/cloud/schedule":
+            if cloud_sync_error:
+                self._set_headers(500)
+                self.wfile.write(
+                    json.dumps(
+                        {"success": False, "error": cloud_sync_error},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                return
+
+            folder_path = data.get("folder_path")
+            remote_path = data.get("remote_path")
+            cron_expression = data.get("cron_expression")
+            daily_time = data.get("daily_time")
+            timezone = data.get("timezone")
+            try:
+                result = cloud_sync_manager.create_schedule(
+                    folder_path,
+                    remote_path,
+                    cron_expression,
+                    daily_time=daily_time,
+                    timezone=timezone,
+                )
+            except Exception as exc:
+                result = {"success": False, "error": str(exc)}
+
+            self._set_headers(200 if result.get("success") else 400)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/cloud/schedule/remove":
+            if cloud_sync_error:
+                self._set_headers(500)
+                self.wfile.write(
+                    json.dumps(
+                        {"success": False, "error": cloud_sync_error},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                return
+
+            job_id = data.get("job_id")
+            try:
+                result = cloud_sync_manager.remove_schedule(job_id)
+            except Exception as exc:
+                result = {"success": False, "error": str(exc)}
+
+            self._set_headers(200 if result.get("success") else 400)
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
             return
 

@@ -11,6 +11,7 @@ const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
 const THEME_STORAGE_KEY = "openclaw-workspace-theme";
 const THEMES = new Set(["workspace", "mac"]);
+const DEFAULT_BDPAN_DAILY_TIME = "02:00";
 
 const state = {
     currentFolderPath: null,
@@ -30,9 +31,19 @@ const state = {
     lastResult: null,
     canRollback: false,
     completedOperationIndexes: new Set(),
+    discardedOperationIndexes: new Set(),
     analysisTone: "idle",
     analysisMessage: "选择文件夹后，这里会显示 OpenClaw 输出的整理建议、操作计划和执行结果。",
     currentTheme: "workspace",
+    cloudSyncStatus: null,
+    cloudSyncFeedback: null,
+    bdpanRemotePath: "",
+    bdpanRemotePathEdited: false,
+    bdpanDailyTime: DEFAULT_BDPAN_DAILY_TIME,
+    bdpanTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
+    bdpanTimezoneEdited: false,
+    isCloudSyncBusy: false,
+    isCloudSyncLoading: false,
 };
 
 const selectFolderBtn = document.getElementById("selectFolderBtn");
@@ -51,6 +62,18 @@ const categoriesList = document.getElementById("categoriesList");
 const operationsMeta = document.getElementById("operationsMeta");
 const operationsList = document.getElementById("operationsList");
 const resultDisplay = document.getElementById("resultDisplay");
+const gatewayStatusPill = document.getElementById("gatewayStatusPill");
+const gatewayStatusText = document.getElementById("gatewayStatusText");
+const topbarJobsChips = document.getElementById("topbarJobsChips");
+const bdpanMeta = document.getElementById("bdpanMeta");
+const bdpanStatusCard = document.getElementById("bdpanStatusCard");
+const bdpanRemotePathInput = document.getElementById("bdpanRemotePathInput");
+const bdpanUploadBtn = document.getElementById("bdpanUploadBtn");
+const bdpanRefreshBtn = document.getElementById("bdpanRefreshBtn");
+const bdpanDailyTimeInput = document.getElementById("bdpanDailyTimeInput");
+const bdpanTimezoneInput = document.getElementById("bdpanTimezoneInput");
+const bdpanScheduleBtn = document.getElementById("bdpanScheduleBtn");
+const bdpanJobsList = document.getElementById("bdpanJobsList");
 const confirmBtn = document.getElementById("confirmBtn");
 const newAnalysisBtn = document.getElementById("newAnalysisBtn");
 const rollbackBtn = document.getElementById("rollbackBtn");
@@ -58,6 +81,24 @@ const cancelBtn = document.getElementById("cancelBtn");
 
 themeSelect.addEventListener("change", (event) => {
     applyTheme(event.target.value);
+});
+
+bdpanRemotePathInput.addEventListener("input", (event) => {
+    state.bdpanRemotePath = event.target.value;
+    state.bdpanRemotePathEdited = true;
+    renderCloudSyncPanel();
+    updateActionState();
+});
+
+bdpanDailyTimeInput.addEventListener("input", (event) => {
+    state.bdpanDailyTime = event.target.value;
+    updateActionState();
+});
+
+bdpanTimezoneInput.addEventListener("input", (event) => {
+    state.bdpanTimezone = event.target.value;
+    state.bdpanTimezoneEdited = true;
+    updateActionState();
 });
 
 selectFolderBtn.addEventListener("click", async () => {
@@ -70,7 +111,7 @@ selectFolderBtn.addEventListener("click", async () => {
 });
 
 analyzeBtn.addEventListener("click", async () => {
-    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation) {
+    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
     }
 
@@ -78,7 +119,7 @@ analyzeBtn.addEventListener("click", async () => {
 });
 
 newAnalysisBtn.addEventListener("click", async () => {
-    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation) {
+    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
         return;
     }
 
@@ -106,7 +147,7 @@ confirmBtn.addEventListener("click", async () => {
 });
 
 rollbackBtn.addEventListener("click", async () => {
-    if (!state.canRollback || state.isExecutingOperation) {
+    if (!state.canRollback || state.isExecutingOperation || state.isCloudSyncBusy) {
         setAnalysisStatus("error", "当前没有可回滚的操作。");
         renderAnalysis();
         return;
@@ -131,7 +172,7 @@ rollbackBtn.addEventListener("click", async () => {
                 at: Date.now(),
             };
             state.canRollback = false;
-            state.completedOperationIndexes = new Set();
+            resetOperationProgress();
             setAnalysisStatus("success", "回滚完成，目录树已刷新。");
             await loadFolderTree(state.currentFolderPath, true);
             openOverviewTab();
@@ -156,10 +197,22 @@ rollbackBtn.addEventListener("click", async () => {
     updateActionState();
 });
 
+bdpanUploadBtn.addEventListener("click", async () => {
+    await uploadCurrentFolderToBdpan();
+});
+
+bdpanRefreshBtn.addEventListener("click", async () => {
+    await loadCloudSyncStatus();
+});
+
+bdpanScheduleBtn.addEventListener("click", async () => {
+    await createBdpanSchedule();
+});
+
 cancelBtn.addEventListener("click", () => {
     state.currentPlan = null;
     state.lastResult = null;
-    state.completedOperationIndexes = new Set();
+    resetOperationProgress();
     setAnalysisStatus("idle", "输出已清空。你可以重新分析当前文件夹。");
     renderAnalysis();
     renderEditor();
@@ -171,9 +224,11 @@ async function openFolder(folderPath) {
     state.currentPlan = null;
     state.lastResult = null;
     state.canRollback = false;
-    state.completedOperationIndexes = new Set();
+    resetOperationProgress();
     state.selectedNodePath = folderPath;
     state.expandedPaths = new Set([folderPath]);
+    state.cloudSyncFeedback = null;
+    initializeBdpanDefaults(folderPath);
 
     selectedPath.textContent = folderPath;
 
@@ -183,7 +238,62 @@ async function openFolder(folderPath) {
 
     await loadFolderTree(folderPath, false);
     openOverviewTab();
+    await loadCloudSyncStatus();
     await analyzeFolder(folderPath);
+}
+
+function initializeBdpanDefaults(folderPath) {
+    const folderName = path.basename(folderPath || "").trim();
+    state.bdpanRemotePath = folderName ? `${folderName}/` : "";
+    state.bdpanRemotePathEdited = false;
+    state.bdpanDailyTime = DEFAULT_BDPAN_DAILY_TIME;
+    state.bdpanTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
+    state.bdpanTimezoneEdited = false;
+    state.cloudSyncStatus = null;
+
+    bdpanRemotePathInput.value = state.bdpanRemotePath;
+    bdpanDailyTimeInput.value = state.bdpanDailyTime;
+    bdpanTimezoneInput.value = state.bdpanTimezone;
+}
+
+async function loadCloudSyncStatus() {
+    if (state.isCloudSyncBusy) {
+        return;
+    }
+
+    state.isCloudSyncLoading = true;
+    renderCloudSyncPanel();
+    updateActionState();
+
+    try {
+        const response = await axios.post(`${API_BASE}/cloud/status`, {});
+        if (response.data.success) {
+            state.cloudSyncStatus = response.data;
+            if (state.currentFolderPath && !state.bdpanRemotePathEdited && !state.bdpanRemotePath) {
+                initializeBdpanDefaults(state.currentFolderPath);
+            }
+            if (!state.bdpanTimezoneEdited && response.data.default_timezone) {
+                state.bdpanTimezone = response.data.default_timezone;
+                bdpanTimezoneInput.value = state.bdpanTimezone;
+            }
+        } else {
+            state.cloudSyncFeedback = {
+                type: "error",
+                message: `同步状态检查失败：${response.data.error}`,
+                at: Date.now(),
+            };
+        }
+    } catch (error) {
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: `同步状态检查失败：${error.message}`,
+            at: Date.now(),
+        };
+    } finally {
+        state.isCloudSyncLoading = false;
+        renderCloudSyncPanel();
+        updateActionState();
+    }
 }
 
 async function loadFolderTree(folderPath, preserveTabs = true) {
@@ -214,7 +324,7 @@ async function loadFolderTree(folderPath, preserveTabs = true) {
 async function analyzeFolder(folderPath) {
     state.isAnalyzing = true;
     state.currentPlan = null;
-    state.completedOperationIndexes = new Set();
+    resetOperationProgress();
     state.canRollback = false;
     setAnalysisStatus("loading", "OpenClaw 正在分析当前文件夹结构...");
     renderAnalysis();
@@ -891,6 +1001,199 @@ function renderAnalysis() {
         resultDisplay.className = "result-display empty-inline";
         resultDisplay.textContent = "尚未执行任何文件操作。";
     }
+
+    renderCloudSyncPanel();
+}
+
+function getJobScheduleLabel(job) {
+    const dailyTime = String(job?.daily_time || "").trim();
+    if (dailyTime) {
+        return `每日 ${dailyTime}`;
+    }
+
+    const cronExpression = String(job?.cron || "").trim();
+    return cronExpression ? `Cron ${cronExpression}` : "未配置时间";
+}
+
+function getJobDisplayName(job) {
+    const folderName = path.basename(String(job?.folder_path || "").trim()) || "未命名任务";
+    return `${folderName} · ${getJobScheduleLabel(job)}`;
+}
+
+function renderTopbarCloudSummary(status, jobs) {
+    const gateway = status?.gateway || {};
+    const gatewayOk = Boolean(gateway.ok);
+
+    if (state.isCloudSyncLoading && !status) {
+        gatewayStatusPill.className = "sync-status-pill neutral";
+        gatewayStatusPill.textContent = "Gateway 检查中";
+        gatewayStatusText.textContent = "正在连接 OpenClaw Gateway 并加载定时任务...";
+    } else if (status) {
+        gatewayStatusPill.className = `sync-status-pill ${gatewayOk ? "ok" : "error"}`;
+        gatewayStatusPill.textContent = gatewayOk ? "Gateway 已连接" : "Gateway 不可用";
+        gatewayStatusText.textContent =
+            String(gateway.detail || "").trim() ||
+            (gatewayOk ? "OpenClaw Gateway 连接正常。" : "尚未连接到 OpenClaw Gateway。");
+    } else {
+        gatewayStatusPill.className = "sync-status-pill neutral";
+        gatewayStatusPill.textContent = "Gateway 未检查";
+        gatewayStatusText.textContent = "尚未检查 OpenClaw Gateway。";
+    }
+
+    if (jobs.length > 0) {
+        topbarJobsChips.innerHTML = jobs
+            .slice(0, 4)
+            .map(
+                (job) => `
+                    <span class="topbar-job-chip ${job.enabled ? "ok" : "warning"}" title="${escapeHtml(
+                        `${job.name || "未命名任务"} ｜ ${job.folder_path || "-"} ｜ ${job.remote_path || "-"}`
+                    )}">
+                        ${escapeHtml(getJobDisplayName(job))}
+                    </span>
+                `
+            )
+            .join("");
+
+        if (jobs.length > 4) {
+            topbarJobsChips.innerHTML += `<span class="topbar-job-chip subtle-chip">+${jobs.length - 4}</span>`;
+        }
+    } else {
+        topbarJobsChips.innerHTML = '<span class="topbar-job-chip subtle-chip">暂无任务</span>';
+    }
+}
+
+function renderCloudSyncPanel() {
+    const hasFolder = Boolean(state.currentFolderPath);
+    const status = state.cloudSyncStatus;
+    const jobs = Array.isArray(status?.jobs) ? status.jobs : [];
+    const gatewayOk = Boolean(status?.gateway?.ok);
+    const bdpanStatus = status?.bdpan || {};
+    const cronStatus = status?.cron || {};
+
+    bdpanRemotePathInput.value = state.bdpanRemotePath;
+    bdpanDailyTimeInput.value = state.bdpanDailyTime || DEFAULT_BDPAN_DAILY_TIME;
+    bdpanTimezoneInput.value = state.bdpanTimezone;
+
+    renderTopbarCloudSummary(status, jobs);
+
+    if (state.isCloudSyncLoading) {
+        bdpanMeta.textContent = "检查中";
+    } else if (state.isCloudSyncBusy) {
+        bdpanMeta.textContent = "执行中";
+    } else {
+        bdpanMeta.textContent = `${jobs.length} 个任务`;
+    }
+
+    const statusLines = [];
+    statusLines.push(
+        `<div class="sync-status-line">
+            <strong>OpenClaw Gateway</strong>
+            <span>${escapeHtml(
+                gatewayOk ? "已连接。" : "当前不可用。"
+            )} ${escapeHtml(status?.gateway?.detail || "尚未检查 OpenClaw Gateway。")}</span>
+        </div>`
+    );
+
+    if (bdpanStatus.installed) {
+        const authText = bdpanStatus.authenticated
+            ? `百度网盘已登录：${bdpanStatus.username || "当前账户"}`
+            : "百度网盘未登录或登录已失效";
+        const authDetail = bdpanStatus.authenticated
+            ? bdpanStatus.token_expires_in || bdpanStatus.expires_at || ""
+            : bdpanStatus.detail || "";
+
+        statusLines.push(
+            `<div class="sync-status-line"><span class="sync-status-pill ${
+                bdpanStatus.authenticated ? "ok" : "warning"
+            }">${escapeHtml(authText)}</span><span>${escapeHtml(authDetail)}</span></div>`
+        );
+    } else {
+        statusLines.push(
+            `<div class="sync-status-line"><span class="sync-status-pill error">bdpan 未安装</span><span>${escapeHtml(
+                bdpanStatus.detail || "未找到 bdpan CLI。"
+            )}</span></div>`
+        );
+    }
+
+    statusLines.push(
+        `<div class="sync-status-line"><span class="sync-status-pill ${
+            cronStatus.enabled ? "ok" : "warning"
+        }">${cronStatus.enabled ? "定时调度已启用" : "定时调度未启用"}</span><span>${escapeHtml(
+            cronStatus.detail || "尚未检查 OpenClaw cron。"
+        )}</span></div>`
+    );
+
+    if (!hasFolder) {
+        statusLines.push(
+            '<div class="sync-status-line sync-status-note"><span>选择文件夹后即可设置上传目标、每日同步时间，并创建新的同步任务。</span></div>'
+        );
+    }
+
+    if (state.cloudSyncFeedback) {
+        statusLines.push(
+            `<div class="sync-feedback sync-feedback-${escapeHtml(state.cloudSyncFeedback.type)}"><p>${escapeHtml(
+                state.cloudSyncFeedback.message
+            )}</p><p class="result-timestamp">${formatDate(state.cloudSyncFeedback.at)}</p></div>`
+        );
+    }
+
+    bdpanStatusCard.className = "cloud-sync-status";
+    bdpanStatusCard.innerHTML = statusLines.join("");
+
+    if (jobs.length > 0) {
+        bdpanJobsList.className = "bdpan-jobs";
+        bdpanJobsList.innerHTML = jobs
+            .map(
+                (job) => `
+                    <article class="sync-job-item">
+                        <div class="sync-job-topline">
+                            <strong>${escapeHtml(job.name || "未命名任务")}</strong>
+                            <div class="sync-job-actions">
+                                <span class="sync-job-pill ${job.enabled ? "ok" : "warning"}">${
+                                    job.enabled ? "已启用" : "已停用"
+                                }</span>
+                                <button
+                                    type="button"
+                                    class="ghost-btn sync-job-remove-btn"
+                                    data-job-id="${escapeHtml(job.id || "")}"
+                                    data-job-name="${escapeHtml(job.name || "未命名任务")}"
+                                    ${state.isCloudSyncBusy ? "disabled" : ""}
+                                >
+                                    取消任务
+                                </button>
+                            </div>
+                        </div>
+                        <div class="sync-job-meta">
+                            <span><strong>同步时间:</strong> ${escapeHtml(getJobScheduleLabel(job))}</span>
+                            <span><strong>时区:</strong> ${escapeHtml(job.timezone || "-")}</span>
+                        </div>
+                        <div class="sync-job-meta">
+                            <span><strong>本地目录:</strong> ${escapeHtml(job.folder_path || "-")}</span>
+                        </div>
+                        <div class="sync-job-meta">
+                            <span><strong>网盘路径:</strong> <code>${escapeHtml(job.remote_path || "-")}</code></span>
+                        </div>
+                        ${
+                            job.next_run_at
+                                ? `<div class="sync-job-next">下次执行：${escapeHtml(job.next_run_at)}</div>`
+                                : ""
+                        }
+                    </article>
+                `
+            )
+            .join("");
+
+        bdpanJobsList.querySelectorAll(".sync-job-remove-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const jobId = String(button.dataset.jobId || "").trim();
+                const jobName = String(button.dataset.jobName || "").trim();
+                await removeBdpanSchedule(jobId, jobName);
+            });
+        });
+    } else {
+        bdpanJobsList.className = "bdpan-jobs empty-inline";
+        bdpanJobsList.textContent = "暂无由当前应用创建的百度网盘同步任务。";
+    }
 }
 
 function getOperationMeta(operation) {
@@ -912,26 +1215,29 @@ function getOperationMeta(operation) {
 
 function renderOperationItem(operation, index) {
     const operationMeta = getOperationMeta(operation);
-    const isCompleted = state.completedOperationIndexes.has(index);
+    const isCompleted = isOperationCompleted(index);
+    const isDiscarded = isOperationDiscarded(index);
     const sourceMarkup = operation.source
         ? `<div><span>${operationMeta.sourceLabel}</span><code>${escapeHtml(operation.source || "")}</code></div>`
         : "";
     const targetMarkup = operation.target
         ? `<div><span>${operationMeta.targetLabel}</span><code>${escapeHtml(operation.target || "")}</code></div>`
         : "";
+    const itemStateClass = isCompleted ? "is-completed" : isDiscarded ? "is-discarded" : "";
+    const actionMarkup = isCompleted
+        ? '<span class="operation-status-badge">已执行</span>'
+        : isDiscarded
+        ? '<span class="operation-status-badge is-discarded">已丢弃</span>'
+        : `<button type="button" class="operation-confirm-btn" data-operation-index="${index}" ${
+              state.isExecutingOperation ? "disabled" : ""
+          }>确认这条</button>`;
 
     return `
-        <article class="operation-item ${isCompleted ? "is-completed" : ""}">
+        <article class="operation-item ${itemStateClass}">
             <div class="operation-topline">
                 <div class="operation-heading">
                     <span class="operation-type ${operationMeta.tone}">${operationMeta.label}</span>
-                    ${
-                        isCompleted
-                            ? '<span class="operation-status-badge">已执行</span>'
-                            : `<button type="button" class="operation-confirm-btn" data-operation-index="${index}" ${
-                                  state.isExecutingOperation ? "disabled" : ""
-                              }>确认这条</button>`
-                    }
+                    ${actionMarkup}
                 </div>
                 <span class="operation-reason">${escapeHtml(operation.reason || "无说明")}</span>
             </div>
@@ -996,6 +1302,23 @@ function setAnalysisStatus(tone, message) {
     state.analysisMessage = message;
 }
 
+function isOperationCompleted(index) {
+    return state.completedOperationIndexes.has(index);
+}
+
+function isOperationDiscarded(index) {
+    return state.discardedOperationIndexes.has(index);
+}
+
+function isOperationHandled(index) {
+    return isOperationCompleted(index) || isOperationDiscarded(index);
+}
+
+function resetOperationProgress() {
+    state.completedOperationIndexes = new Set();
+    state.discardedOperationIndexes = new Set();
+}
+
 function rewriteOperationPathWithRenameFolder(rawPath, renameOperation) {
     const pathValue = String(rawPath || "");
     if (!pathValue) {
@@ -1052,17 +1375,222 @@ function updatePendingOperationsAfterExecution(executedOperations) {
 function updateActionState() {
     const hasFolder = Boolean(state.currentFolderPath);
     const operationCount = getPendingOperations().length;
-    const isBusy = state.isAnalyzing || state.isExecutingOperation;
+    const isBusy = state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy;
+    const hasRemotePath = Boolean(String(state.bdpanRemotePath || "").trim());
+    const hasDailyTime = Boolean(String(state.bdpanDailyTime || "").trim());
+    const hasTimezone = Boolean(String(state.bdpanTimezone || "").trim());
 
     analyzeBtn.disabled = !hasFolder || isBusy;
     newAnalysisBtn.disabled = !hasFolder || isBusy;
     confirmBtn.disabled = isBusy || operationCount === 0;
     rollbackBtn.disabled = isBusy || !state.canRollback;
     cancelBtn.disabled = isBusy || (!state.currentPlan && !state.lastResult);
+    bdpanUploadBtn.disabled = !hasFolder || isBusy || !hasRemotePath;
+    bdpanRefreshBtn.disabled = state.isCloudSyncBusy || state.isCloudSyncLoading;
+    bdpanScheduleBtn.disabled = !hasFolder || isBusy || !hasRemotePath || !hasDailyTime || !hasTimezone;
+}
+
+async function uploadCurrentFolderToBdpan() {
+    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
+        return;
+    }
+
+    const remotePath = String(state.bdpanRemotePath || "").trim();
+    if (!remotePath) {
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: "请先填写百度网盘目标路径。",
+            at: Date.now(),
+        };
+        renderCloudSyncPanel();
+        updateActionState();
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `确定要把当前文件夹上传到百度网盘吗？\n\n本地目录：${state.currentFolderPath}\n网盘路径：${remotePath}\n\n说明：立即上传会直接调用本机 bdpan CLI，以避免大文件夹通过聊天链路中途停住。`
+    );
+    if (!confirmed) {
+        return;
+    }
+
+    state.isCloudSyncBusy = true;
+    state.cloudSyncFeedback = {
+        type: "loading",
+        message: "正在通过本机 bdpan CLI 上传当前文件夹到百度网盘...",
+        at: Date.now(),
+    };
+    renderCloudSyncPanel();
+    updateActionState();
+
+    try {
+        const response = await axios.post(`${API_BASE}/cloud/upload`, {
+            folder_path: state.currentFolderPath,
+            remote_path: remotePath,
+        });
+
+        state.cloudSyncFeedback = {
+            type: response.data.success ? "success" : "error",
+            message: buildCloudSyncMessage(response.data),
+            at: Date.now(),
+        };
+    } catch (error) {
+        const errorMessage = error.response?.data?.error || error.message;
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: `百度网盘上传失败：${errorMessage}`,
+            at: Date.now(),
+        };
+    } finally {
+        state.isCloudSyncBusy = false;
+        await loadCloudSyncStatus();
+        renderCloudSyncPanel();
+        updateActionState();
+    }
+}
+
+async function createBdpanSchedule() {
+    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
+        return;
+    }
+
+    const remotePath = String(state.bdpanRemotePath || "").trim();
+    const dailyTime = String(state.bdpanDailyTime || "").trim();
+    const timezone = String(state.bdpanTimezone || "").trim();
+
+    if (!remotePath || !dailyTime || !timezone) {
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: "请先填写完整的网盘路径、每日同步时间和时区。",
+            at: Date.now(),
+        };
+        renderCloudSyncPanel();
+        updateActionState();
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `确定要创建一个每日自动同步到百度网盘的任务吗？\n\n本地目录：${state.currentFolderPath}\n网盘路径：${remotePath}\n每日时间：${dailyTime}\n时区：${timezone}`
+    );
+    if (!confirmed) {
+        return;
+    }
+
+    state.isCloudSyncBusy = true;
+    state.cloudSyncFeedback = {
+        type: "loading",
+        message: "正在创建 OpenClaw 每日同步任务...",
+        at: Date.now(),
+    };
+    renderCloudSyncPanel();
+    updateActionState();
+
+    try {
+        const response = await axios.post(`${API_BASE}/cloud/schedule`, {
+            folder_path: state.currentFolderPath,
+            remote_path: remotePath,
+            daily_time: dailyTime,
+            timezone,
+        });
+
+        state.cloudSyncFeedback = {
+            type: response.data.success ? "success" : "error",
+            message: buildCloudSyncMessage(response.data),
+            at: Date.now(),
+        };
+
+        if (response.data.timezone) {
+            state.bdpanTimezone = response.data.timezone;
+            bdpanTimezoneInput.value = state.bdpanTimezone;
+        }
+    } catch (error) {
+        const errorMessage = error.response?.data?.error || error.message;
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: `创建定时同步失败：${errorMessage}`,
+            at: Date.now(),
+        };
+    } finally {
+        state.isCloudSyncBusy = false;
+        await loadCloudSyncStatus();
+        renderCloudSyncPanel();
+        updateActionState();
+    }
+}
+
+async function removeBdpanSchedule(jobId, jobName) {
+    if (!jobId || state.isCloudSyncBusy) {
+        return;
+    }
+
+    const confirmed = window.confirm(`确定要取消这个定时任务吗？\n\n任务：${jobName || jobId}`);
+    if (!confirmed) {
+        return;
+    }
+
+    state.isCloudSyncBusy = true;
+    state.cloudSyncFeedback = {
+        type: "loading",
+        message: `正在取消定时任务：${jobName || jobId}`,
+        at: Date.now(),
+    };
+    renderCloudSyncPanel();
+    updateActionState();
+
+    try {
+        const response = await axios.post(`${API_BASE}/cloud/schedule/remove`, {
+            job_id: jobId,
+        });
+
+        state.cloudSyncFeedback = {
+            type: response.data.success ? "success" : "error",
+            message: buildCloudSyncMessage(response.data),
+            at: Date.now(),
+        };
+    } catch (error) {
+        const errorMessage = error.response?.data?.error || error.message;
+        state.cloudSyncFeedback = {
+            type: "error",
+            message: `取消定时任务失败：${errorMessage}`,
+            at: Date.now(),
+        };
+    } finally {
+        state.isCloudSyncBusy = false;
+        await loadCloudSyncStatus();
+        renderCloudSyncPanel();
+        updateActionState();
+    }
+}
+
+function buildCloudSyncMessage(payload) {
+    const summary = String(payload?.summary || payload?.error || "").trim();
+    const remotePath = String(payload?.remote_path || "").trim();
+    const dailyTime = String(payload?.daily_time || payload?.job?.daily_time || "").trim();
+    const details = Array.isArray(payload?.details) ? payload.details.filter(Boolean) : [];
+    const nextStep = String(payload?.next_step || "").trim();
+
+    const parts = [];
+    if (summary) {
+        parts.push(summary);
+    }
+    if (remotePath) {
+        parts.push(`目标路径：${remotePath}`);
+    }
+    if (dailyTime) {
+        parts.push(`每日时间：${dailyTime}`);
+    }
+    if (details.length > 0) {
+        parts.push(`细节：${details.join("；")}`);
+    }
+    if (nextStep) {
+        parts.push(`下一步：${nextStep}`);
+    }
+
+    return parts.join(" ");
 }
 
 async function executeSingleOperation(index) {
-    if (state.isExecutingOperation || state.isAnalyzing || state.completedOperationIndexes.has(index)) {
+    if (state.isExecutingOperation || state.isAnalyzing || isOperationHandled(index)) {
         return;
     }
 
@@ -1121,19 +1649,25 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                     .map((item) => item?.operation?.client_index)
                     .filter((value) => Number.isInteger(value))
             );
+            const discardedResults = resultItems.filter((item) => !item?.success);
+            const discardedIndexes = new Set(
+                discardedResults
+                    .map((item) => item?.operation?.client_index)
+                    .filter((value) => Number.isInteger(value))
+            );
             const successfulOperations = operations
                 .filter(({ index }) => succeededIndexes.has(index))
                 .map(({ operation }) => operation);
-            const failedResults = resultItems.filter((item) => !item?.success);
 
             updatePendingOperationsAfterExecution(successfulOperations);
             succeededIndexes.forEach((index) => state.completedOperationIndexes.add(index));
+            discardedIndexes.forEach((index) => state.discardedOperationIndexes.add(index));
 
             const remainingCount = getPendingOperations().length;
             const readmeGenerated = Boolean(response.data.readme_generated);
             const readmeError = response.data.readme_error ? String(response.data.readme_error) : "";
             const successCount = successfulOperations.length;
-            const failureCount = failedResults.length;
+            const discardedCount = discardedResults.length;
 
             if (successCount > 0) {
                 state.canRollback = true;
@@ -1141,7 +1675,7 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                 openOverviewTab();
             }
 
-            if (failureCount === 0) {
+            if (discardedCount === 0) {
                 const baseMessage = options.writeReadme
                     ? `已完成 ${successCount} 条操作，当前整理结果已落盘。`
                     : `已执行 ${successCount} 条操作，剩余 ${remainingCount} 条待确认。`;
@@ -1165,22 +1699,26 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                         : "操作已执行，目录树已同步刷新。"
                 );
             } else {
-                const failureSummary = failedResults
+                const discardedSummary = discardedResults
                     .slice(0, 2)
                     .map((item) => item.error)
                     .filter(Boolean)
                     .join("；");
 
                 state.lastResult = {
-                    type: "error",
+                    type: readmeError ? "error" : "warning",
                     message:
-                        `本轮共成功执行 ${successCount} 条，失败 ${failureCount} 条，剩余 ${remainingCount} 条待确认。` +
-                        (failureSummary ? ` 失败原因：${failureSummary}` : ""),
+                        `本轮成功执行 ${successCount} 条，已丢弃 ${discardedCount} 条无法执行的建议。` +
+                        (remainingCount > 0 ? ` 剩余 ${remainingCount} 条待确认。` : "") +
+                        (discardedSummary ? ` 丢弃原因：${discardedSummary}` : "") +
+                        (readmeError ? ` README.md 写入失败：${readmeError}` : ""),
                     at: Date.now(),
                 };
                 setAnalysisStatus(
-                    "error",
-                    `部分操作执行失败：成功 ${successCount} 条，失败 ${failureCount} 条。`
+                    readmeError ? "error" : "warning",
+                    remainingCount > 0
+                        ? `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认。`
+                        : `已自动丢弃 ${discardedCount} 条无法执行的建议。`
                 );
             }
         } else {
@@ -1209,7 +1747,7 @@ function getPendingOperations() {
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
     return operations
         .map((operation, index) => ({ operation, index }))
-        .filter(({ index }) => !state.completedOperationIndexes.has(index));
+        .filter(({ index }) => !isOperationHandled(index));
 }
 
 async function pruneMissingTabs() {
@@ -1365,3 +1903,4 @@ renderExplorer();
 renderEditor();
 renderAnalysis();
 updateActionState();
+loadCloudSyncStatus();

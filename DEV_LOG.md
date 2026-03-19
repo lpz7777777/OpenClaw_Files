@@ -884,3 +884,201 @@ Mac 风格主题特点：
 | 模糊路径解析 | ✅ | 处理空格、轻微扩展名偏差 |
 | Gateway prompt 自适应压缩 | ✅ | 避免 context overflow |
 | 主题切换 | ✅ | 当前工作区 + Mac 风格 |
+
+### 6. 百度网盘上传与定时同步（2026-03-19）
+
+新增了一个围绕 OpenClaw `bdpan-storage` skill 的“百度网盘同步”能力，直接接入右侧分析面板：
+
+- 选择文件夹后，前端会额外查询 OpenClaw Gateway 状态、`bdpan` 登录状态和当前已创建的同步任务
+- 新增“网盘目标路径”输入框，目标路径按 `bdpan-storage` 规则使用相对 `/apps/bdpan/` 的相对路径
+- 新增“上传到百度网盘”按钮，立即上传改为直接调用本机 `bdpan upload`，避免大文件夹在聊天链路里中途停住
+- 新增 Cron 表达式和时区输入框，可直接通过 `openclaw cron add` 创建定时同步任务
+- 后端对 `bdpan` 可执行文件路径做了 Windows 兼容定位，不再依赖当前 PowerShell 的 `PATH`
+- 后端对 OpenClaw CLI / bdpan CLI 的子进程输出统一改为 UTF-8 解码，修复 Windows 中文环境下的编码异常
+- 创建定时任务时改为使用用户默认的 OpenClaw CLI 环境，而不是项目私有 `.openclaw-state`，避免 `pairing required`
+- 新增任务列表归一化逻辑，兼容 `openclaw cron list` 中 `schedule.expr` / `schedule.tz` / `state.nextRunAtMs` 结构
+- 定时同步保留 `openclaw cron add` + `bdpan-storage` skill 方案，便于按时自动同步同一文件夹
+
+针对用户测试反馈的补修：
+
+- 用户在测试 `D:\Coding Demo\202603_OpenClaw_Files\Test` 时反馈两类问题：
+  1. 执行计划时报错：`Target folder already exists and contains conflicting items: 预汇报-文信吉` 与 `Source path does not exist`
+  2. 百度网盘上传在处理到约 138 个文件后不再继续
+- 针对第 1 类问题，执行器补了三层容错：
+  - `rename_folder` 合并到已存在目录时，支持递归目录合并，而不是只做浅层冲突检测
+  - 当父目录已重命名或已合并后，后续仍引用旧路径的操作会自动按已应用的路径重写继续执行
+  - 当源路径已经不存在，但目标结果已存在或删除动作事实上已经完成时，直接视为成功，保证重复执行和断点续跑更稳定
+- 针对第 2 类问题，立即上传改为直接调用本机 `bdpan upload --json`：
+  - 不再依赖 OpenClaw 会话消息链路承载整个大文件夹上传过程
+  - 后端会解析 `bdpan` 返回的 JSON，提取远端路径、提示信息和查看链接
+  - 定时同步仍保留为 `openclaw cron add` + `bdpan-storage` skill，兼顾自动化与现有 OpenClaw 能力
+
+本轮验证：
+
+- `python -m py_compile backend/file_analyzer.py backend/cloud_sync.py backend/server.py backend/gateway_client.py`
+- `node --check renderer.js`
+- 用与用户反馈等价的 4 条操作精确复现：
+  - `rename_folder: 01-入党材料汇总/7-预汇报 -> 01-入党材料汇总/07-预汇报`
+  - 两条文件上移 `move`
+  - 一条包装目录 `delete`
+  - 最终 4 条全部成功
+- 实际调用 `CloudSyncManager.upload_folder()` 完成小文件夹上传，返回成功，并带回网盘查看链接
+
+本轮涉及文件：
+
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+- [backend/server.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py)
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+## 2026-03-19 补充：执行失败建议自动丢弃
+
+用户在 `D:\Coding Demo\202603_OpenClaw_Files\Test_党员发展文件测试` 回归时反馈：
+
+- 执行建议后仍可能看到类似“本轮共成功执行 55 条，失败 9 条，剩余 9 条待确认”
+- 其中失败原因主要是 `Target path already exists`
+- 这类建议实际上已经不适合继续人工确认，应当在本轮执行后直接从待确认列表移除
+
+本轮调整：
+
+- 前端新增“已丢弃建议”状态，与“已执行”分开显示
+- 只要某条建议已经尝试执行但后端返回失败结果，就直接标记为“已丢弃”
+- 已丢弃建议不再计入 `pending`，也不会继续出现在“剩余待确认”统计里
+- 批量执行结果文案从“失败 X 条”改为“已丢弃 X 条无法执行的建议”
+- 为“已丢弃”补充单独的卡片/徽标样式，避免误显示成“已执行”
+
+涉及文件：
+
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+本轮验证：
+
+- `node --check renderer.js`
+- `node --check main.js`
+
+---
+
+## 十四、2026-03-19 补充：百度网盘模块与顶部状态
+
+### 1. 百度网盘模块位置调整
+
+**调整内容：**
+- 百度网盘模块从右侧分析面板移动到中间栏下方
+- 与文件预览区并列，方便用户在预览文件后直接上传
+
+**涉及文件：**
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+### 2. 每日同步时间设置
+
+**改进：**
+- 将原有的 "Cron 表达式" 改为更友好的 "每日同步时间" 输入
+- 前端自动将时间转换为对应的 Cron 表达式
+- 支持用户设置具体的小时和分钟
+
+**实现位置：**
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+
+### 3. 应用内取消定时任务
+
+**功能：**
+- 前端新增 "取消任务" 按钮
+- 点击后调用 `openclaw cron rm <id>` 移除指定任务
+- 任务列表实时更新，已取消的任务不再显示
+
+**实现位置：**
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [backend/server.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py)
+
+### 4. 顶部栏状态显示
+
+**新增状态：**
+- **Gateway 连接状态**：应用启动时即显示
+  - "GATEWAY 已连接"
+  - "GATEWAY 不可用"
+- **本应用创建的定时任务**：显示任务数量和下次运行时间
+
+**实现位置：**
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+### 5. 启动时状态拉取
+
+**改进：**
+- 应用启动时主动拉取 Gateway 连接状态
+- 同时拉取已创建的定时任务列表
+- 状态实时更新，无需用户手动刷新
+
+**实现位置：**
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+
+### 6. 验证结果
+
+**静态检查：**
+- `node --check renderer.js`
+- `node --check main.js`
+- `python -m py_compile backend/cloud_sync.py backend/server.py`
+
+**功能验证：**
+- ✅ 百度网盘模块位置正确显示在中间栏下方
+- ✅ 每日同步时间设置正常工作
+- ✅ 应用内取消定时任务功能正常
+- ✅ 顶部栏 Gateway 状态正确显示
+- ✅ 顶部栏定时任务概览正常
+- ✅ 启动时自动拉取状态
+
+### 7. 涉及文件
+
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+- [backend/server.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py)
+
+---
+
+## 十五、当前功能清单（更新）
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| OpenClaw Gateway 接入 | ✅ | WebSocket + 设备身份 + 配对 |
+| 三栏工作区布局 | ✅ | 左侧资源树、中间预览、右侧分析 |
+| 浅色扁平主题 | ✅ | 实色卡片、弱阴影、强边框 |
+| 文件类型图标 | ✅ | 不同类型不同颜色 |
+| 逐条确认执行 | ✅ | 每条建议可单独确认 |
+| 子目录递归分析 | ✅ | 扫描各级子文件夹 |
+| Word/Excel 预览 | ✅ | docx/xlsx/xls/csv |
+| 分析摘要结构化 | ✅ | 一条一条显示 |
+| JSON 容错修复 | ✅ | 本地清洗 + 自动修复 |
+| 流式响应拼接 | ✅ | 分片累计拼接 |
+| 回滚 | ✅ | 支持最近一轮操作 |
+| delete 操作备份 | ✅ | 同盘临时备份区 |
+| rename_folder 操作 | ✅ | 目录重命名与合并 |
+| 启发式建议补充 | ✅ | 高置信模式识别 |
+| 规整化建议 | ✅ | create_folder / rename_folder |
+| 文件级驱动分析 | ✅ | file_index 驱动 |
+| 确认全部后根目录 README 生成 | ✅ | 自动写入整理后的结构说明 |
+| README 回滚恢复 | ✅ | 与文件操作一起回滚 |
+| 执行器路径重写增强 | ✅ | 目录重命名/目录移动后自动跟踪 |
+| 重复文件自动去重 | ✅ | 同内容文件遇到同名目标可自动处理 |
+| 模糊路径解析 | ✅ | 处理空格、轻微扩展名偏差 |
+| Gateway prompt 自适应压缩 | ✅ | 避免 context overflow |
+| 主题切换 | ✅ | 当前工作区 + Mac 风格 |
+| 百度网盘上传 | ✅ | 支持立即上传 |
+| 定时同步任务 | ✅ | 按每日时间设置 |
+| 任务取消 | ✅ | 应用内取消定时任务 |
+| 顶部栏状态显示 | ✅ | Gateway 状态 + 任务概览 |
+| 执行失败建议自动丢弃 | ✅ | 失败建议直接标记为已丢弃 |
+
+---
+
+## 十六、当前版本信息
+
+- 版本：1.0.0
+- 最后更新：2026-03-19
+- 已推送到 GitHub：`https://github.com/lpz7777777/OpenClaw_Files`

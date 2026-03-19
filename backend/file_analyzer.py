@@ -10,7 +10,10 @@ import anthropic
 from dotenv import load_dotenv
 from json_repair import repair_json
 
-from gateway_client import GatewayClient
+try:
+    from gateway_client import GatewayClient
+except ImportError:  # pragma: no cover - fallback for root-level imports
+    from backend.gateway_client import GatewayClient
 
 load_dotenv()
 
@@ -821,30 +824,48 @@ Correct JSON examples:
         os.rename(source_path, backup_target)
         return backup_root, backup_target
 
-    def _merge_directory_into_existing_target(self, source_path, target_path):
+    def _merge_directory_into_existing_target(self, source_path, target_path, relative_prefix=""):
         if not os.path.isdir(source_path):
             raise ValueError("Source path is not a directory")
         if not os.path.isdir(target_path):
             raise ValueError("Target path is not a directory")
 
         child_names = sorted(os.listdir(source_path), key=lambda item: item.lower())
-        conflicting_names = [
-            child_name
-            for child_name in child_names
-            if os.path.exists(os.path.join(target_path, child_name))
-        ]
-        if conflicting_names:
-            raise ValueError(
-                "Target folder already exists and contains conflicting items: "
-                + ", ".join(conflicting_names[:5])
-            )
-
         moved_entries = []
         for child_name in child_names:
             source_child = os.path.join(source_path, child_name)
             target_child = os.path.join(target_path, child_name)
-            os.rename(source_child, target_child)
-            moved_entries.append(child_name)
+            relative_child_path = self._join_relative_path(relative_prefix, child_name)
+
+            if not os.path.exists(target_child):
+                os.rename(source_child, target_child)
+                moved_entries.append(relative_child_path)
+                continue
+
+            if os.path.isdir(source_child) and os.path.isdir(target_child):
+                moved_entries.extend(
+                    self._merge_directory_into_existing_target(
+                        source_child,
+                        target_child,
+                        relative_child_path,
+                    )
+                )
+                continue
+
+            if (
+                os.path.isfile(source_child)
+                and os.path.isfile(target_child)
+                and self._files_have_same_content(source_child, target_child)
+            ):
+                raise ValueError(
+                    "Target folder already exists and contains duplicate file content: "
+                    + relative_child_path
+                )
+
+            raise ValueError(
+                "Target folder already exists and contains conflicting items: "
+                + relative_child_path
+            )
 
         os.rmdir(source_path)
         return moved_entries
@@ -1809,6 +1830,28 @@ Correct JSON examples:
                         source = fuzzy_source
 
                 if op_type != "create_folder" and not os.path.exists(source):
+                    operation_already_applied = False
+                    if op_type == "delete":
+                        operation_already_applied = True
+                    elif target and os.path.exists(target):
+                        operation_already_applied = True
+
+                    if operation_already_applied:
+                        if op_type == "rename_folder":
+                            applied_path_rewrites.append(
+                                {
+                                    "source": operation.get("source", ""),
+                                    "target": operation.get("target", ""),
+                                }
+                            )
+                        results.append(
+                            {
+                                "success": True,
+                                "operation": operation,
+                            }
+                        )
+                        continue
+
                     results.append(
                         {
                             "success": False,
@@ -2089,6 +2132,7 @@ Correct JSON examples:
                             target_child = os.path.join(target, child_name)
                             source_child = os.path.join(source, child_name)
                             if os.path.exists(target_child):
+                                self._ensure_parent_directory(source_child)
                                 os.rename(target_child, source_child)
                         continue
 

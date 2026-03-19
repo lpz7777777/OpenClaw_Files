@@ -13,6 +13,10 @@
 - **文档预览**：支持 Word (.docx)、Excel (.xlsx/.xls/.csv) 文件预览
 - **规整化建议**：自动生成创建文件夹、重命名文件夹等规范化操作
 - **启发式识别**：自动识别 Office 临时文件、重复下载文件、已解压压缩包等
+- **百度网盘上传**：支持将当前目录上传到百度网盘
+- **定时同步**：可设置每日同步时间，自动上传更新
+- **任务管理**：应用内取消定时任务
+- **状态显示**：顶部栏实时显示 Gateway 连接状态和定时任务概览
 
 ### 界面特性
 
@@ -287,3 +291,31 @@ git push origin main
 ```
 https://github.com/lpz7777777/OpenClaw_Files
 ```
+
+## 2026-03-19 补充
+
+新增了一个“百度网盘同步”面板，位置在右侧分析栏中：
+
+- 可以把当前已选文件夹直接上传到百度网盘
+- 可以填写 Cron 表达式和时区，通过 `openclaw cron add` 创建定时同步任务
+- 会显示 OpenClaw Gateway 状态、百度网盘登录状态以及当前由本应用创建的同步任务列表
+
+实现说明：
+
+- 网盘目标路径使用相对 `/apps/bdpan/` 的相对路径
+- `bdpan` 在 Windows 上不要求出现在当前 shell 的 `PATH` 中，后端会自动定位已安装的 CLI
+- 定时任务使用用户默认的 OpenClaw CLI 环境创建，避免项目私有 `.openclaw-state` 带来的 `pairing required`
+- 立即上传直接调用本机 `bdpan upload`，避免大文件夹通过 OpenClaw 聊天链路时中途停住
+- 定时同步仍通过 `openclaw cron add` 创建，并让 OpenClaw 在计划时间调用已安装的 `bdpan-storage` skill
+
+本轮修复：
+
+- 修复了 `rename_folder` 合并到已存在目录时，后续仍引用旧路径的 `move` / `delete` 操作被误判失败的问题
+- 执行器现在会把“源路径已不存在但目标已经到位”的情况视为已生效，避免重复执行时出现 `Source path does not exist`
+- 对目录合并增加了递归合并能力，降低 `Target folder already exists and contains conflicting items` 这类报错的出现概率
+- 百度网盘立即上传链路已从 OpenClaw 对话调用切换为本机 `bdpan upload`，用来规避大文件夹上传到约百余个文件后停住的问题
+
+验证情况：
+
+- 已对一组真实等价场景复现 `7-预汇报 -> 07-预汇报` + 后续文件上移 + 删除包装目录，4 条操作全部成功
+- 已实际调用 `bdpan upload` 完成小文件夹上传，并正确返回网盘路径与查看链接
