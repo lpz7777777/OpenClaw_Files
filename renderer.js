@@ -19,6 +19,8 @@ const PREVIEW_BYTE_LIMIT = 200 * 1024; // 文件预览大小限制（200KB）
 const WORD_EXTENSIONS = new Set([".doc", ".docx"]); // Word 文档扩展名
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]); // Excel 表格扩展名
 const THEME_STORAGE_KEY = "openclaw-workspace-theme"; // 主题存储键名
+const AUTO_ANALYZE_STORAGE_KEY = "openclaw-auto-analyze-on-open";
+const FOLDER_INSTRUCTION_STORAGE_KEY = "openclaw-folder-instructions";
 const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
 const WECHAT_CLEANUP_MODE = "wechat_cleanup";
 
@@ -105,6 +107,10 @@ const state = {
     isCloudSyncLoading: false,
     analysisMode: "standard",
     analysisTargetRootPath: "",
+    autoAnalyzeOnOpen: true,
+    folderInstructionMap: {},
+    currentFolderInstructions: [],
+    instructionDraft: "",
     wechatCleanupConfig: {
         sourcePath: "",
         targetPath: "",
@@ -122,6 +128,10 @@ const themeDescription = document.getElementById("themeDescription"); // 主题�
 const selectedPath = document.getElementById("selectedPath"); // 选中路径显示
 const explorerStats = document.getElementById("explorerStats"); // 资源管理器统计
 const explorerTree = document.getElementById("explorerTree"); // 资源管理器树
+const instructionMeta = document.getElementById("instructionMeta");
+const instructionMessages = document.getElementById("instructionMessages");
+const instructionInput = document.getElementById("instructionInput");
+const sendInstructionBtn = document.getElementById("sendInstructionBtn");
 const tabStrip = document.getElementById("tabStrip"); // 标签栏
 const editorMeta = document.getElementById("editorMeta"); // 编辑器元信息
 const editorContent = document.getElementById("editorContent"); // 编辑器内容
@@ -148,6 +158,7 @@ const confirmBtn = document.getElementById("confirmBtn"); // 确认按钮
 const newAnalysisBtn = document.getElementById("newAnalysisBtn"); // 重新分析按钮
 const rollbackBtn = document.getElementById("rollbackBtn"); // 回滚按钮
 const cancelBtn = document.getElementById("cancelBtn"); // 取消按钮
+const autoAnalyzeToggle = document.getElementById("autoAnalyzeToggle");
 const wechatCleanupDialog = document.getElementById("wechatCleanupDialog"); // 微信清理弹窗
 const wechatSourcePathInput = document.getElementById("wechatSourcePathInput"); // 微信源目录输入
 const wechatTargetPathInput = document.getElementById("wechatTargetPathInput"); // 微信目标目录输入
@@ -166,6 +177,12 @@ renderThemeOptions();
  */
 themeSelect.addEventListener("change", (event) => {
     applyTheme(event.target.value);
+});
+
+autoAnalyzeToggle.addEventListener("change", (event) => {
+    state.autoAnalyzeOnOpen = Boolean(event.target.checked);
+    localStorage.setItem(AUTO_ANALYZE_STORAGE_KEY, String(state.autoAnalyzeOnOpen));
+    updateActionState();
 });
 
 /**
@@ -193,6 +210,22 @@ bdpanTimezoneInput.addEventListener("input", (event) => {
     state.bdpanTimezone = event.target.value;
     state.bdpanTimezoneEdited = true;
     updateActionState();
+});
+
+instructionInput.addEventListener("input", (event) => {
+    state.instructionDraft = event.target.value;
+    updateActionState();
+});
+
+instructionInput.addEventListener("keydown", async (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        await sendInstructionMessage();
+    }
+});
+
+sendInstructionBtn.addEventListener("click", async () => {
+    await sendInstructionMessage();
 });
 
 /**
@@ -384,9 +417,12 @@ async function openFolder(folderPath, options = {}) {
     state.cloudSyncFeedback = null;
     state.analysisMode = analysisMode;
     state.analysisTargetRootPath = analysisMode === WECHAT_CLEANUP_MODE ? targetRootPath : "";
+    state.currentFolderInstructions = getFolderInstructionMessages(folderPath);
+    state.instructionDraft = "";
     initializeBdpanDefaults(folderPath);
 
     selectedPath.textContent = buildSelectedPathText();
+    renderFolderInstructions();
 
     setAnalysisStatus(
         "loading",
@@ -399,6 +435,18 @@ async function openFolder(folderPath, options = {}) {
 
     await loadFolderTree(folderPath, false);
     openOverviewTab();
+    if (!state.autoAnalyzeOnOpen) {
+        setAnalysisStatus(
+            "idle",
+            analysisMode === WECHAT_CLEANUP_MODE
+                ? "已读取微信文件目录。自动分析已关闭，请点击“重新生成”后再生成专项整理方案。"
+                : "已读取当前文件夹。自动分析已关闭，请点击“重新生成”后再开始分析。"
+        );
+        renderAnalysis();
+        updateActionState();
+        return;
+    }
+
     await analyzeFolder(folderPath, {
         mode: analysisMode,
         targetRootPath: state.analysisTargetRootPath,
@@ -569,6 +617,7 @@ async function analyzeFolder(folderPath, options = {}) {
         mode === WECHAT_CLEANUP_MODE
             ? String(options.targetRootPath || state.analysisTargetRootPath || "").trim()
             : "";
+    const userRequests = normalizeInstructionMessages(state.currentFolderInstructions);
 
     state.isAnalyzing = true;
     state.currentPlan = null;
@@ -591,6 +640,7 @@ async function analyzeFolder(folderPath, options = {}) {
             folder_path: folderPath,
             mode,
             target_root_path: targetRootPath,
+            user_requests: userRequests,
         });
 
         if (response.data.success) {
@@ -683,6 +733,7 @@ function renderExplorer() {
         explorerStats.textContent = "等待打开";
         explorerTree.className = "explorer-tree empty-state";
         explorerTree.textContent = "选择一个文件夹后，这里会显示完整的目录结构。";
+        renderFolderInstructions();
         return;
     }
 
@@ -690,6 +741,7 @@ function renderExplorer() {
     explorerTree.className = "explorer-tree";
     explorerTree.innerHTML = "";
     explorerTree.appendChild(createTreeBranch(state.currentTree.root, 0));
+    renderFolderInstructions();
 }
 
 function createTreeBranch(node, depth) {
@@ -898,6 +950,13 @@ function renderOverviewDocument() {
     const summaryMarkup = renderSummaryMarkup(state.currentPlan);
     const categories = Array.isArray(state.currentPlan?.categories) ? state.currentPlan.categories : [];
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
+    const folderInstructions = normalizeInstructionMessages(state.currentFolderInstructions);
+    const instructionMarkup =
+        folderInstructions.length > 0
+            ? `<ul class="summary-list">${folderInstructions
+                  .map((item) => `<li class="summary-item">${escapeHtml(item)}</li>`)
+                  .join("")}</ul>`
+            : '<p class="subtle">未额外提供整理要求。</p>';
 
     return `
         <div class="document-shell">
@@ -943,6 +1002,11 @@ function renderOverviewDocument() {
                 <article class="overview-card">
                     <h4>待执行操作</h4>
                     <p>${getPendingOperations().length} / ${operations.length}</p>
+                </article>
+
+                <article class="overview-card full-span">
+                    <h4>用户整理要求</h4>
+                    ${instructionMarkup}
                 </article>
             </div>
         </div>
@@ -1583,6 +1647,147 @@ function setAnalysisStatus(tone, message) {
     state.analysisMessage = message;
 }
 
+function normalizeInstructionMessages(messages) {
+    if (!Array.isArray(messages)) {
+        return [];
+    }
+
+    return messages
+        .map((message) => String(message || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(-8);
+}
+
+function normalizeInstructionFolderPath(folderPath) {
+    const normalizedPath = String(folderPath || "").trim();
+    if (!normalizedPath) {
+        return "";
+    }
+
+    try {
+        return path.resolve(normalizedPath);
+    } catch (error) {
+        return normalizedPath;
+    }
+}
+
+function persistFolderInstructionMap() {
+    localStorage.setItem(
+        FOLDER_INSTRUCTION_STORAGE_KEY,
+        JSON.stringify(state.folderInstructionMap || {})
+    );
+}
+
+function getFolderInstructionMessages(folderPath) {
+    const key = normalizeInstructionFolderPath(folderPath);
+    if (!key) {
+        return [];
+    }
+
+    return normalizeInstructionMessages(state.folderInstructionMap?.[key]);
+}
+
+function syncCurrentFolderInstructions() {
+    const key = normalizeInstructionFolderPath(state.currentFolderPath);
+    if (!key) {
+        return;
+    }
+
+    const messages = normalizeInstructionMessages(state.currentFolderInstructions);
+    state.currentFolderInstructions = messages;
+
+    if (messages.length > 0) {
+        state.folderInstructionMap[key] = messages;
+    } else {
+        delete state.folderInstructionMap[key];
+    }
+
+    persistFolderInstructionMap();
+}
+
+function renderFolderInstructions() {
+    const hasFolder = Boolean(state.currentFolderPath);
+    const messages = normalizeInstructionMessages(state.currentFolderInstructions);
+    const isBusy = state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy;
+
+    if (!hasFolder) {
+        instructionMeta.textContent = "未发送";
+        instructionMessages.className = "instruction-messages empty-inline";
+        instructionMessages.textContent = "打开文件夹后，你可以在这里补充希望 OpenClaw 如何整理这个文件夹。";
+        instructionInput.value = "";
+        instructionInput.disabled = true;
+        return;
+    }
+
+    instructionMeta.textContent = `${messages.length} 条要求`;
+    instructionInput.disabled = false;
+    instructionInput.value = state.instructionDraft;
+
+    if (messages.length === 0) {
+        instructionMessages.className = "instruction-messages empty-inline";
+        instructionMessages.textContent = "还没有发送整理要求。你可以补充命名规则、归档方式或不想被移动的内容。";
+        return;
+    }
+
+    instructionMessages.className = "instruction-messages";
+    instructionMessages.innerHTML = messages
+        .map(
+            (message, index) => `
+                <div class="instruction-message">
+                    <p>${escapeHtml(message)}</p>
+                    <button
+                        class="instruction-remove-btn"
+                        type="button"
+                        data-instruction-index="${index}"
+                        title="删除这条要求"
+                        ${isBusy ? "disabled" : ""}
+                    >
+                        ×
+                    </button>
+                </div>
+            `
+        )
+        .join("");
+
+    instructionMessages.querySelectorAll("[data-instruction-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const index = Number(button.dataset.instructionIndex);
+            if (!Number.isInteger(index)) {
+                return;
+            }
+
+            state.currentFolderInstructions = state.currentFolderInstructions.filter(
+                (_, itemIndex) => itemIndex !== index
+            );
+            syncCurrentFolderInstructions();
+            renderFolderInstructions();
+            renderEditor();
+            updateActionState();
+        });
+    });
+}
+
+async function sendInstructionMessage() {
+    if (!state.currentFolderPath || state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
+        return;
+    }
+
+    const message = String(state.instructionDraft || "").replace(/\s+/g, " ").trim();
+    if (!message) {
+        return;
+    }
+
+    state.currentFolderInstructions = normalizeInstructionMessages([
+        ...state.currentFolderInstructions,
+        message,
+    ]);
+    state.instructionDraft = "";
+    syncCurrentFolderInstructions();
+    renderFolderInstructions();
+    renderEditor();
+    updateActionState();
+}
+
 function isOperationCompleted(index) {
     return state.completedOperationIndexes.has(index);
 }
@@ -1660,6 +1865,7 @@ function updateActionState() {
     const hasRemotePath = Boolean(String(state.bdpanRemotePath || "").trim());
     const hasDailyTime = Boolean(String(state.bdpanDailyTime || "").trim());
     const hasTimezone = Boolean(String(state.bdpanTimezone || "").trim());
+    const hasInstructionDraft = Boolean(String(state.instructionDraft || "").trim());
 
     wechatCleanupBtn.disabled = isBusy;
     analyzeBtn.disabled = !hasFolder || isBusy;
@@ -1671,6 +1877,8 @@ function updateActionState() {
     bdpanRefreshBtn.disabled = state.isCloudSyncBusy || state.isCloudSyncLoading;
     bdpanScheduleBtn.disabled = !hasFolder || isBusy || !hasRemotePath || !hasDailyTime || !hasTimezone;
     wechatCleanupRunBtn.disabled = isBusy;
+    sendInstructionBtn.disabled = !hasFolder || isBusy || !hasInstructionDraft;
+    autoAnalyzeToggle.disabled = isBusy;
 }
 
 /**
@@ -2280,6 +2488,31 @@ function initializeTheme() {
     applyTheme(DEFAULT_THEME);
 }
 
+function initializeAutoAnalyzePreference() {
+    const storedValue = localStorage.getItem(AUTO_ANALYZE_STORAGE_KEY);
+    state.autoAnalyzeOnOpen = storedValue !== "false";
+    autoAnalyzeToggle.checked = state.autoAnalyzeOnOpen;
+}
+
+function initializeFolderInstructionMap() {
+    try {
+        const storedValue = JSON.parse(localStorage.getItem(FOLDER_INSTRUCTION_STORAGE_KEY) || "{}");
+        if (storedValue && typeof storedValue === "object" && !Array.isArray(storedValue)) {
+            state.folderInstructionMap = Object.fromEntries(
+                Object.entries(storedValue).map(([folderPath, messages]) => [
+                    normalizeInstructionFolderPath(folderPath),
+                    normalizeInstructionMessages(messages),
+                ])
+            );
+            return;
+        }
+    } catch (error) {
+        // Ignore invalid persisted instruction state and fall back to defaults.
+    }
+
+    state.folderInstructionMap = {};
+}
+
 /**
  * 应用主题
  * @param {string} themeName - 主题名称
@@ -2315,6 +2548,8 @@ function getThemeDefinition(themeName) {
  * 初始化应用
  */
 initializeWechatCleanupConfig(); // 初始化微信清理配置
+initializeAutoAnalyzePreference();
+initializeFolderInstructionMap();
 initializeTheme(); // 初始化主题
 renderExplorer(); // 渲染资源管理器
 renderEditor(); // 渲染编辑器

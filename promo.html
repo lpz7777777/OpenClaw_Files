@@ -209,6 +209,74 @@
         .pill strong { display: block; margin-bottom: 6px; font-size: 16px; }
         .pill span { display: block; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
 
+        .feature-spotlight {
+            display: grid;
+            grid-template-columns: minmax(0, .94fr) minmax(0, 1.06fr);
+            gap: 20px;
+            margin-top: 22px;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background:
+                linear-gradient(145deg, rgba(255,255,255,.86), rgba(244,248,254,.94)),
+                var(--panel-strong);
+            border: 1px solid rgba(255,255,255,.68);
+            box-shadow: var(--shadow-sm);
+        }
+        .feature-spotlight-media img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .feature-spotlight-copy {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 14px;
+            padding: 26px 28px;
+        }
+        .feature-tag {
+            display: inline-flex;
+            align-self: flex-start;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(46, 124, 246, 0.12);
+            color: var(--blue-strong);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .feature-spotlight-copy h3 {
+            font-size: 30px;
+            line-height: 1.15;
+            letter-spacing: -.04em;
+        }
+        .feature-spotlight-copy p {
+            color: var(--text-muted);
+            font-size: 15px;
+            line-height: 1.85;
+        }
+        .feature-points {
+            display: grid;
+            gap: 10px;
+            margin-top: 2px;
+        }
+        .feature-points div {
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(243,247,253,.92);
+            border: 1px solid rgba(168,180,203,.16);
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        .feature-points strong {
+            color: var(--text);
+        }
+
         .adv-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
         .adv { padding: 28px; border-radius: var(--radius-lg); background: var(--panel-strong); border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-sm); }
         .adv h3 { font-size: 24px; margin-bottom: 12px; letter-spacing: -.03em; }
@@ -255,7 +323,7 @@
         [data-reveal].visible { opacity: 1; transform: translateY(0); }
 
         @media (max-width: 1080px) {
-            .hero, .gallery, .adv-grid, .detail-grid { grid-template-columns: 1fr; }
+            .hero, .gallery, .feature-spotlight, .adv-grid, .detail-grid { grid-template-columns: 1fr; }
             .hero-visual { min-height: auto; }
             .device, .float { position: relative; inset: auto; }
             .device { margin-bottom: 16px; }
@@ -298,7 +366,7 @@
                 <div class="eyebrow">Mac 风格智能文件整理体验</div>
                 <h1>让文件整理<span>像用一台设计优雅的 Mac 一样自然。</span></h1>
                 <p class="lead">OpenClaro / 澄理 把 OpenClaw 的智能分析、可确认执行、可回滚操作和桌面级工作区放进同一个界面里。</p>
-                <p class="detail">你可以在一个统一的工作台中浏览目录、预览文档、理解 AI 建议、执行整理方案、回滚最近一轮变更，还可以继续把目录同步到百度网盘，或直接处理微信文件归档与去重。它不只是一个“挪文件”的工具，而是一套围绕真实桌面工作流设计的整理体验。</p>
+                <p class="detail">你可以在一个统一的工作台中浏览目录、预览文档、先补充自己的整理要求、理解 AI 建议、执行整理方案、回滚最近一轮变更，还可以继续把目录同步到百度网盘，或直接处理微信文件归档与去重。它不只是一个“挪文件”的工具，而是一套围绕真实桌面工作流设计的整理体验。</p>
                 <div class="hero-actions">
                     <a class="btn btn-primary" href="https://github.com/lpz7777777/OpenClaw_Files" target="_blank" rel="noreferrer">访问 GitHub 仓库</a>
                     <a class="btn btn-secondary" href="#showcase">浏览应用界面</a>
@@ -343,7 +411,7 @@
             <div class="section-copy">
                 <small>Design Story</small>
                 <h2>为真实文件整理场景而设计，而不是只做一层 AI 外壳。</h2>
-                <p>OpenClaro / 澄理 的重点不是“把几个功能拼在一起”，而是把目录浏览、文档预览、AI 分析、确认执行、回滚恢复、微信专项清理和百度网盘同步整合成一条真正顺手的桌面工作流。它既希望帮你提高效率，也希望在处理重要资料时给你足够稳定和清晰的反馈。</p>
+                <p>OpenClaro / 澄理 的重点不是“把几个功能拼在一起”，而是把目录浏览、文档预览、Prompt 补充输入、AI 分析、确认执行、回滚恢复、微信专项清理和百度网盘同步整合成一条真正顺手的桌面工作流。它既希望帮你提高效率，也希望在处理重要资料时给你足够稳定和清晰的反馈。</p>
             </div>
             <div class="cards-3">
                 <article class="card"><div class="icon">🧩</div><h3>一体化工作区</h3><p>目录浏览、文档预览、AI 建议、执行结果和云同步都在同一张桌面里完成，减少切换和上下文丢失。</p></article>
@@ -356,7 +424,7 @@
             <div class="section-copy">
                 <small>Showcase</small>
                 <h2>布局一眼能懂，操作一用就顺。</h2>
-                <p>主界面延续了 mac 风格常见的玻璃层次和轻盈背景，但重点不止是“像”。更重要的是，左中右三栏的视线流线非常明确：先理解目录，再查看内容，最后确认建议与执行结果。</p>
+                <p>主界面延续了 mac 风格常见的玻璃层次和轻盈背景，但重点不止是“像”。更重要的是，左中右三栏的视线流线非常明确：先理解目录，再查看内容，需要时补充整理要求，最后确认建议与执行结果。</p>
             </div>
             <div class="gallery">
                 <article class="gallery-main">
@@ -376,6 +444,21 @@
                     </div>
                 </aside>
             </div>
+            <article class="feature-spotlight">
+                <div class="feature-spotlight-media">
+                    <img src="./screenshots/prompt-panel.png" alt="Prompt 输入功能">
+                </div>
+                <div class="feature-spotlight-copy">
+                    <div class="feature-tag">Prompt Input</div>
+                    <h3>先把整理意图说清楚，再让 AI 给出更贴近你的方案。</h3>
+                    <p>左侧资源管理器底部新增了独立的 Prompt 输入区，不必再被动等待一套“默认理解”的整理建议。你可以先告诉系统目录应该怎么归档、哪些文件不要动、命名规则想保持成什么样，再发起分析，让结果从一开始就更符合自己的工作习惯。</p>
+                    <div class="feature-points">
+                        <div><strong>像聊天一样补充说明：</strong>“按年份归档”、“图片单独整理”、“不要移动原始合同”这类要求都可以直接输入。</div>
+                        <div><strong>要求会随当前文件夹保留：</strong>重新打开同一目录时，之前的整理意图还能继续沿用。</div>
+                        <div><strong>和手动生成模式天然配合：</strong>先补充 Prompt，再点击重新生成，更适合需要先设定边界的重要目录。</div>
+                    </div>
+                </div>
+            </article>
         </section>
 
         <section class="panel" id="flows" data-reveal>

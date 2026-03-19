@@ -64,10 +64,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             folder_path = data.get("folder_path")
             mode = data.get("mode")
             target_root_path = data.get("target_root_path")
+            user_requests = data.get("user_requests")
             result = analyzer.analyze_folder(
                 folder_path,
                 mode=mode,
                 target_root_path=target_root_path,
+                user_requests=user_requests,
             )
             self._set_headers()
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))

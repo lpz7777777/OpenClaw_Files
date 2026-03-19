@@ -49,7 +49,7 @@
                         微信文件清理
                     </button>
                     <button id="selectFolderBtn" class="primary-btn">打开文件夹</button>
-                    <button id="analyzeBtn" class="secondary-btn">重新分析</button>
+                    <button id="analyzeBtn" class="secondary-btn">重新生成</button>
                 </div>
         </header>
 
@@ -71,6 +71,32 @@
                 <div id="explorerTree" class="explorer-tree empty-state">
                     选择一个文件夹后，这里会显示完整的目录结构。
                 </div>
+
+                <section class="explorer-chat-panel">
+                    <div class="explorer-chat-header">
+                        <div>
+                            <p class="panel-kicker">Prompt</p>
+                            <h3>整理要求</h3>
+                        </div>
+                        <div id="instructionMeta" class="panel-meta">未发送</div>
+                    </div>
+
+                    <div id="instructionMessages" class="instruction-messages empty-inline">
+                        打开文件夹后，你可以在这里补充希望 OpenClaw 如何整理这个文件夹。
+                    </div>
+
+                    <div class="instruction-input-row">
+                        <textarea
+                            id="instructionInput"
+                            class="text-input instruction-input"
+                            rows="3"
+                            placeholder="例如：按年份和项目分组；图片单独归档；不要移动合同原件。"
+                        ></textarea>
+                        <div class="instruction-actions">
+                            <button id="sendInstructionBtn" class="secondary-btn" type="button">发送要求</button>
+                        </div>
+                    </div>
+                </section>
             </aside>
 
             <section class="panel editor-panel">
@@ -210,8 +236,13 @@
 
                 <div class="action-buttons">
                     <button id="confirmBtn" class="primary-btn">确认全部</button>
-                    <button id="newAnalysisBtn" class="secondary-btn">重新分析</button>
+                    <button id="newAnalysisBtn" class="secondary-btn">重新生成</button>
                     <button id="rollbackBtn" class="warning-btn">回滚</button>
+                    <label class="toggle-switch" for="autoAnalyzeToggle" title="打开后，选择文件夹会自动开始分析；关闭后，需要手动点击重新生成。">
+                        <input id="autoAnalyzeToggle" type="checkbox" checked>
+                        <span class="toggle-switch-track" aria-hidden="true"></span>
+                        <span class="toggle-switch-text">自动分析</span>
+                    </label>
                     <button id="cancelBtn" class="ghost-btn">清空输出</button>
                 </div>
             </aside>

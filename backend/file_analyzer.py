@@ -119,7 +119,13 @@ class FileAnalyzer:
             self.client = anthropic.Anthropic(api_key=api_key)
             print("[FileAnalyzer] Using direct Anthropic API mode")
 
-    def analyze_folder(self, folder_path, mode="standard", target_root_path=None):
+    def analyze_folder(
+        self,
+        folder_path,
+        mode="standard",
+        target_root_path=None,
+        user_requests=None,
+    ):
         """Analyze a folder and generate a cleanup plan."""
         last_error = None
         try:
@@ -127,6 +133,7 @@ class FileAnalyzer:
             normalized_target_root_path = self._normalize_optional_target_root_path(
                 target_root_path
             )
+            normalized_user_requests = self._normalize_user_requests(user_requests)
             if (
                 normalized_mode == WECHAT_CLEANUP_MODE
                 and not normalized_target_root_path
@@ -142,6 +149,7 @@ class FileAnalyzer:
                         folder_path,
                         structure,
                         target_root_path=normalized_target_root_path,
+                        user_requests=normalized_user_requests,
                         prompt_profile=prompt_profile,
                     )
                     response_text = self._generate_text(prompt)
@@ -196,6 +204,7 @@ class FileAnalyzer:
         folder_path,
         structure,
         target_root_path="",
+        user_requests=None,
         prompt_profile=None,
     ):
         if mode == WECHAT_CLEANUP_MODE:
@@ -203,12 +212,14 @@ class FileAnalyzer:
                 folder_path,
                 target_root_path,
                 structure,
+                user_requests=user_requests,
                 prompt_profile=prompt_profile,
             )
 
         return self._build_analysis_prompt(
             folder_path,
             structure,
+            user_requests=user_requests,
             prompt_profile=prompt_profile,
         )
 
@@ -230,7 +241,9 @@ class FileAnalyzer:
 
         return self._enrich_plan_with_heuristics(plan, structure)
 
-    def _build_analysis_prompt(self, folder_path, structure, prompt_profile=None):
+    def _build_analysis_prompt(
+        self, folder_path, structure, user_requests=None, prompt_profile=None
+    ):
         prompt_profile = prompt_profile or ANALYSIS_PROMPT_PROFILES[0]
         prompt_payload = self._build_prompt_payload(structure, prompt_profile)
         folder_count = prompt_payload.get("prompt_view", {}).get("folder_index_included", 0)
@@ -242,7 +255,8 @@ class FileAnalyzer:
             separators=(",", ":"),
         )
 
-        return f"""请基于下面的目录摘要生成一个稳妥的文件整理计划。
+        return self._merge_prompt_with_user_requests(
+            f"""请基于下面的目录摘要生成一个稳妥的文件整理计划。
 
 目标文件夹：{folder_path}
 
@@ -269,13 +283,16 @@ class FileAnalyzer:
 
 只返回 JSON，格式如下：
 {{"summary":"整体整理思路","summary_points":["摘要1","摘要2"],"categories":["分类1","分类2"],"operations":[{{"type":"move|rename|rename_folder|create_folder|delete","source":"relative/path","target":"relative/path","reason":"说明原因"}}]}}
-"""
+""",
+            user_requests,
+        )
 
     def _build_wechat_cleanup_prompt(
         self,
         folder_path,
         target_root_path,
         structure,
+        user_requests=None,
         prompt_profile=None,
     ):
         prompt_profile = prompt_profile or ANALYSIS_PROMPT_PROFILES[0]
@@ -288,7 +305,8 @@ class FileAnalyzer:
             separators=(",", ":"),
         )
 
-        return f"""请基于下面的目录摘要，为“微信文件清理”生成一个稳妥的整理计划。
+        return self._merge_prompt_with_user_requests(
+            f"""请基于下面的目录摘要，为“微信文件清理”生成一个稳妥的整理计划。
 
 源文件夹：{folder_path}
 目标文件夹：{target_root_path}
@@ -311,7 +329,9 @@ class FileAnalyzer:
 
 只返回 JSON，格式如下：
 {{"summary":"整体整理思路","summary_points":["摘要1","摘要2"],"categories":["分类1","分类2"],"operations":[{{"type":"move|create_folder|delete","source":"relative/path","target":"relative/path","reason":"说明原因"}}]}}
-"""
+""",
+            user_requests,
+        )
 
     def _build_prompt_payload(self, structure, prompt_profile):
         folder_entries = structure.get("folder_index", [])
@@ -388,6 +408,34 @@ class FileAnalyzer:
             if can_reduce_samples:
                 sample_files = max(sample_files - 1, 0)
                 sample_subfolders = max(sample_subfolders - 1, 0)
+
+    def _normalize_user_requests(self, user_requests):
+        if not isinstance(user_requests, list):
+            return []
+
+        normalized_requests = []
+        for item in user_requests:
+            text = re.sub(r"\s+", " ", str(item or "")).strip()
+            if not text:
+                continue
+            normalized_requests.append(text[:300])
+
+        return normalized_requests[-8:]
+
+    def _merge_prompt_with_user_requests(self, prompt, user_requests):
+        normalized_requests = self._normalize_user_requests(user_requests)
+        if not normalized_requests:
+            return prompt
+
+        numbered_requests = "\n".join(
+            f"{index}. {item}" for index, item in enumerate(normalized_requests, start=1)
+        )
+        return (
+            f"{prompt}\n\n"
+            "额外要求：\n"
+            f"{numbered_requests}\n"
+            "如果这些要求与真实文件结构、路径安全性或已有约束冲突，请在 summary_points 中说明原因，并优先保持稳妥。"
+        )
 
     def _select_folder_index_for_prompt(
         self,

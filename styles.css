@@ -35,6 +35,14 @@
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 88%);
     --panel-border-style: solid;
     --button-focus-ring: rgba(47, 122, 107, 0.18);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(252, 248, 241, 0.96), rgba(244, 236, 225, 0.92));
+    --instruction-muted-bg: rgba(248, 242, 232, 0.76);
+    --instruction-bubble-bg: rgba(255, 253, 249, 0.96);
+    --instruction-bubble-border: rgba(197, 184, 166, 0.52);
+    --instruction-composer-bg: rgba(255, 251, 245, 0.98);
+    --instruction-composer-border: rgba(197, 184, 166, 0.68);
+    --instruction-composer-shadow: 0 18px 34px rgba(74, 55, 33, 0.1);
 }
 
 body[data-theme="mac"] {
@@ -74,6 +82,14 @@ body[data-theme="mac"] {
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.35), transparent 92%);
     --panel-border-style: solid;
     --button-focus-ring: rgba(46, 124, 246, 0.24);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(252, 253, 255, 0.94), rgba(235, 242, 252, 0.92));
+    --instruction-muted-bg: rgba(241, 245, 252, 0.82);
+    --instruction-bubble-bg: rgba(255, 255, 255, 0.92);
+    --instruction-bubble-border: rgba(154, 168, 191, 0.34);
+    --instruction-composer-bg: rgba(255, 255, 255, 0.96);
+    --instruction-composer-border: rgba(129, 153, 191, 0.4);
+    --instruction-composer-shadow: 0 18px 38px rgba(84, 98, 122, 0.14);
 }
 
 body[data-theme="fjord"] {
@@ -112,6 +128,14 @@ body[data-theme="fjord"] {
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 90%);
     --panel-border-style: dashed;
     --button-focus-ring: rgba(31, 110, 162, 0.22);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(234, 242, 248, 0.94));
+    --instruction-muted-bg: rgba(239, 244, 248, 0.84);
+    --instruction-bubble-bg: rgba(251, 253, 255, 0.96);
+    --instruction-bubble-border: rgba(170, 191, 206, 0.48);
+    --instruction-composer-bg: rgba(251, 253, 255, 0.98);
+    --instruction-composer-border: rgba(170, 191, 206, 0.68);
+    --instruction-composer-shadow: 0 16px 32px rgba(49, 78, 101, 0.12);
 }
 
 body[data-theme="amber"] {
@@ -150,6 +174,14 @@ body[data-theme="amber"] {
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.24), transparent 88%);
     --panel-border-style: solid;
     --button-focus-ring: rgba(184, 106, 35, 0.18);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(255, 249, 240, 0.98), rgba(248, 234, 214, 0.94));
+    --instruction-muted-bg: rgba(251, 240, 226, 0.82);
+    --instruction-bubble-bg: rgba(255, 250, 242, 0.98);
+    --instruction-bubble-border: rgba(202, 168, 133, 0.48);
+    --instruction-composer-bg: rgba(255, 250, 244, 0.98);
+    --instruction-composer-border: rgba(202, 168, 133, 0.68);
+    --instruction-composer-shadow: 0 16px 32px rgba(109, 72, 35, 0.11);
 }
 
 body[data-theme="sage"] {
@@ -188,6 +220,14 @@ body[data-theme="sage"] {
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.2), transparent 92%);
     --panel-border-style: solid;
     --button-focus-ring: rgba(74, 132, 99, 0.2);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(250, 253, 250, 0.96), rgba(234, 242, 235, 0.94));
+    --instruction-muted-bg: rgba(238, 245, 239, 0.84);
+    --instruction-bubble-bg: rgba(251, 254, 251, 0.98);
+    --instruction-bubble-border: rgba(173, 194, 171, 0.46);
+    --instruction-composer-bg: rgba(251, 254, 251, 0.98);
+    --instruction-composer-border: rgba(173, 194, 171, 0.68);
+    --instruction-composer-shadow: 0 16px 32px rgba(73, 96, 78, 0.11);
 }
 
 body[data-theme="petal"] {
@@ -227,6 +267,14 @@ body[data-theme="petal"] {
     --body-grid-mask: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 90%);
     --panel-border-style: solid;
     --button-focus-ring: rgba(196, 100, 115, 0.2);
+    --instruction-panel-bg:
+        linear-gradient(180deg, rgba(255, 250, 252, 0.97), rgba(245, 231, 236, 0.94));
+    --instruction-muted-bg: rgba(247, 234, 238, 0.84);
+    --instruction-bubble-bg: rgba(255, 251, 253, 0.98);
+    --instruction-bubble-border: rgba(202, 174, 185, 0.48);
+    --instruction-composer-bg: rgba(255, 251, 253, 0.98);
+    --instruction-composer-border: rgba(202, 174, 185, 0.68);
+    --instruction-composer-shadow: 0 18px 34px rgba(110, 74, 89, 0.11);
 }
 
 * {
@@ -406,6 +454,61 @@ body::before {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-panel-alt);
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.toggle-switch-track {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(138, 126, 111, 0.22);
+    transition: background 0.18s ease;
+}
+
+.toggle-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    transition: transform 0.18s ease;
+}
+
+.toggle-switch input:checked + .toggle-switch-track {
+    background: rgba(47, 122, 107, 0.68);
+}
+
+.toggle-switch input:checked + .toggle-switch-track::after {
+    transform: translateX(16px);
+}
+
+.toggle-switch-text {
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .theme-switcher {
@@ -641,6 +744,200 @@ button:disabled {
     flex: 1;
     overflow: auto;
     padding: 12px;
+}
+
+.explorer-chat-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--instruction-panel-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.explorer-chat-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.explorer-chat-header h3 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.explorer-chat-panel .panel-kicker {
+    margin-bottom: 6px;
+}
+
+.explorer-chat-panel .panel-meta {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--instruction-bubble-border);
+    background: var(--instruction-bubble-bg);
+    font-size: 12px;
+    line-height: 1;
+}
+
+.instruction-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 140px;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.explorer-chat-panel .empty-inline {
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px dashed var(--instruction-bubble-border);
+    background: var(--instruction-muted-bg);
+    line-height: 1.6;
+    font-size: 13px;
+}
+
+.instruction-message {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--instruction-bubble-border);
+    background: var(--instruction-bubble-bg);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
+}
+
+.instruction-message::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 48%, transparent));
+}
+
+.instruction-message p {
+    margin: 0;
+    padding-left: 8px;
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 13px;
+}
+
+.instruction-remove-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+    background: color-mix(in srgb, var(--bg-panel) 82%, white);
+    color: var(--danger);
+    font-family: var(--font-ui);
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1;
+    text-align: center;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.instruction-remove-btn:hover:not(:disabled) {
+    background: var(--danger-soft);
+    transform: translateY(-1px);
+}
+
+.instruction-remove-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.instruction-input-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid var(--instruction-composer-border);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 34%),
+        var(--instruction-composer-bg);
+    box-shadow: var(--instruction-composer-shadow);
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+.instruction-input-row:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--instruction-composer-border));
+    box-shadow:
+        0 0 0 3px var(--button-focus-ring),
+        var(--instruction-composer-shadow);
+    transform: translateY(-1px);
+}
+
+.instruction-input {
+    min-height: 78px;
+    padding: 11px 13px 8px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.instruction-input:hover {
+    background: transparent;
+}
+
+.instruction-input:focus {
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.instruction-input::placeholder {
+    color: var(--text-subtle);
+}
+
+.instruction-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px 9px;
+    border-top: 1px solid color-mix(in srgb, var(--instruction-composer-border) 72%, transparent);
+    background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.24));
+}
+
+.instruction-actions .secondary-btn {
+    min-width: 80px;
+    min-height: 32px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border-color: transparent;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    box-shadow: none;
+    font-size: 12.5px;
+    line-height: 1.1;
+}
+
+.instruction-actions .secondary-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-soft) 76%, white);
 }
 
 .tree-branch {
@@ -1540,6 +1837,10 @@ button:disabled {
     background: rgba(248, 242, 232, 0.75);
 }
 
+.action-buttons .toggle-switch {
+    margin-right: auto;
+}
+
 body[data-theme="mac"] .app-shell {
     padding: 18px;
     gap: 14px;
@@ -1615,6 +1916,10 @@ body[data-theme="mac"] .document-header,
 body[data-theme="mac"] .tab-strip,
 body[data-theme="mac"] .action-buttons {
     background: rgba(255, 255, 255, 0.42);
+}
+
+body[data-theme="mac"] .toggle-switch {
+    background: rgba(255, 255, 255, 0.72);
 }
 
 body[data-theme="mac"] .tab-button {
