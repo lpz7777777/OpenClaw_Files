@@ -28,7 +28,8 @@
 - [支持的操作类型](#-支持的操作类型)
 - [项目结构](#-项目结构)
 - [近期改动](#-近期改动)
-- [打包与分发](#-打包与分发)
+- [下载安装](#-下载安装)
+- [打包与发布（开发者）](#-打包与发布开发者)
 - [验证与排错](#-验证与排错)
 - [常见问题](#-常见问题)
 
@@ -458,15 +459,17 @@ OpenClaw_Files/
 
 ---
 
-## 📦 打包与分发
+## 📥 下载安装
 
-### 构建安装包
+前往 [GitHub Releases](https://github.com/lpz7777777/OpenClaw_Files/releases) 页面，下载最新版本的安装包：
 
-```bash
-npm run build
-```
+1. 📦 下载 `OpenClaw Files-Setup-x.x.x.exe`
+2. 🖱️ 双击运行安装程序
+3. 📂 选择安装目录（默认即可）
+4. ✅ 完成安装后，桌面和开始菜单会自动创建快捷方式
+5. 🚀 双击快捷方式启动应用
 
-构建完成后，可在 `dist` 目录找到生成的 Windows 安装包。
+> 💡 首次启动后，请在应用的用户数据目录中配置 `.env` 文件（参考上方 [安装与配置](#-安装与配置) 中的环境变量说明）。
 
 ### 💻 系统要求
 
@@ -475,8 +478,90 @@ npm run build
 | 🖥️ **操作系统** | Windows 10 或 Windows 11 |
 | 🔧 **架构** | 64 位 |
 | 💾 **内存** | 至少 4GB |
-| 💽 **磁盘空间** | 至少 100MB 可用空间 |
+| 💽 **磁盘空间** | 至少 500MB 可用空间 |
 | ☁️ **外部依赖** | 如需云同步，请安装 OpenClaw / bdpan |
+
+---
+
+## 📦 打包与发布（开发者）
+
+本节面向开发者，说明如何从源码构建安装包并发布到 GitHub。
+
+### 1️⃣ 环境准备
+
+确保已安装以下工具：
+
+```bash
+node -v          # Node.js
+npm -v           # npm
+python --version # Python 3.x
+pip show pyinstaller  # PyInstaller
+```
+
+### 2️⃣ 安装项目依赖
+
+```bash
+npm install
+pip install -r requirements.txt
+pip install pyinstaller
+```
+
+### 3️⃣ 构建安装包
+
+一键打包（包含 Python 后端 + Electron 应用）：
+
+```bash
+npm run build:win
+```
+
+或分步执行：
+
+```bash
+# 步骤一：用 PyInstaller 打包 Python 后端
+npm run build:backend
+
+# 步骤二：用 electron-builder 打包 Windows 安装包
+npx electron-builder --win nsis
+```
+
+构建完成后，安装包位于 `release/` 目录：
+
+```
+release/
+├── OpenClaw Files-Setup-1.0.0.exe   # ← 这就是分发给用户的安装包
+├── latest.yml                        # 自动更新元数据（可选上传）
+└── ...
+```
+
+### 4️⃣ 推送代码到 GitHub
+
+```bash
+git add .
+git commit -m "your commit message"
+git push origin main
+```
+
+### 5️⃣ 创建 GitHub Release 并上传安装包
+
+使用 [GitHub CLI](https://cli.github.com/)：
+
+```bash
+# 首次使用需要登录
+gh auth login
+
+# 创建 Release 并上传安装包
+gh release create v1.0.0 "release/OpenClaw Files-Setup-1.0.0.exe" \
+  --title "OpenClaw Files v1.0.0" \
+  --notes "OpenClaw Files v1.0.0 正式版本"
+```
+
+或在 GitHub 网页端操作：
+
+1. 进入仓库页面 → **Releases** → **Draft a new release**
+2. 创建标签（如 `v1.0.0`）
+3. 填写标题和说明
+4. 上传 `release/OpenClaw Files-Setup-1.0.0.exe`
+5. 点击 **Publish release**
 
 ---
 
