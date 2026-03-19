@@ -67,32 +67,22 @@ OpenClaw Files 是一个围绕"本地文件整理"设计的桌面工作区：
 
 应用提供多套精美主题，默认以 **mac 主题** 启动：
 
-#### 雾杉主题
 <div align="center">
-  <img src="./screenshots/theme-switcher_wushan.png" alt="雾杉主题" width="90%">
-</div>
 
-#### 北岸主题
-<div align="center">
-  <img src="./screenshots/theme-switcher_beian.png" alt="北岸主题" width="90%">
-</div>
+| 雾杉主题 | 北岸主题 |
+|:-------:|:-------:|
+| <img src="./screenshots/theme-switcher_wushan.png" alt="雾杉主题" width="90%"> | <img src="./screenshots/theme-switcher_beian.png" alt="北岸主题" width="90%"> |
+| 暖纸质感、沉稳配色 | 冷静蓝灰、工程线稿 |
 
-#### 琥珀主题
-<div align="center">
-  <img src="./screenshots/theme-switcher_hupo.png" alt="琥珀主题" width="90%">
-</div>
+| 琥珀主题 | 雨后主题 |
+|:-------:|:-------:|
+| <img src="./screenshots/theme-switcher_hupo.png" alt="琥珀主题" width="90%"> | <img src="./screenshots/theme-switcher_yuhou.png" alt="雨后主题" width="90%"> |
+| 奶油纸页、琥珀点缀 | 低饱和绿调、柔雾背景 |
 
-#### 雨后主题
-<div align="center">
-  <img src="./screenshots/theme-switcher_yuhou.png" alt="雨后主题" width="90%">
-</div>
-
-#### 珊瑚主题
-<div align="center">
-  <img src="./screenshots/theme-switcher_shanhu.png" alt="珊瑚主题" width="90%">
-</div>
-
-<div align="center">
+| 珊瑚主题 |
+|:-------:|
+| <img src="./screenshots/theme-switcher_shanhu.png" alt="珊瑚主题" width="45%"> |
+| 柔和珊瑚色、清晨云雾 |
 
 每套主题都有独特的色彩风格和氛围，适合不同的使用场景和个人偏好。
 
