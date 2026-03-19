@@ -17,4 +17,7 @@ pyinstaller `
     --distpath $distPath `
     --workpath $workPath `
     --specpath $specPath `
+    --exclude-module PyQt5 `
+    --exclude-module PySide6 `
+    --exclude-module tkinter `
     $entryScript

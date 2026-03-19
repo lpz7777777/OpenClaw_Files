@@ -49,7 +49,9 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "signAndEditExecutable": false,
+      "signingHashAlgorithms": []
     },
     "nsis": {
       "oneClick": false,

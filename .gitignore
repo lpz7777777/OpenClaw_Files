@@ -3,6 +3,7 @@ node_modules/
 *.log
 dist/
 build/
+release/
 __pycache__/
 *.pyc
 .DS_Store
