@@ -15,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover - fallback for root-level imports
     from backend.gateway_client import GatewayClient
 
-load_dotenv()
+load_dotenv(os.getenv("OPENCLAW_FILES_ENV", "").strip() or None)
 
 MAX_SCAN_DEPTH = 5
 MAX_FILES_PER_FOLDER = 160
@@ -2068,11 +2068,12 @@ Correct JSON examples:
         all_succeeded = bool(results) and all(
             item.get("success") for item in results
         )
+        any_succeeded = any(item.get("success") for item in results)
         readme_generated = False
         readme_path = ""
         readme_error = ""
 
-        if write_readme and all_succeeded:
+        if write_readme and any_succeeded:
             try:
                 readme_result = self._write_structure_readme(folder_path, results)
                 backup_info.append(readme_result["backup_item"])

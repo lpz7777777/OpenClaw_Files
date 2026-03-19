@@ -10,7 +10,40 @@ const PREVIEW_BYTE_LIMIT = 200 * 1024;
 const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
 const THEME_STORAGE_KEY = "openclaw-workspace-theme";
-const THEMES = new Set(["workspace", "mac"]);
+const THEME_DEFINITIONS = [
+    {
+        id: "workspace",
+        label: "雾杉工作台",
+        description: "暖纸质感、沉稳配色，适合长时间整理文件。",
+    },
+    {
+        id: "mac",
+        label: "晴空果冻窗",
+        description: "明亮玻璃感和轻盈高光，保留 macOS 风格气质。",
+    },
+    {
+        id: "fjord",
+        label: "北岸蓝图",
+        description: "冷静蓝灰与工程线稿感，适合偏技术型工作流。",
+    },
+    {
+        id: "amber",
+        label: "琥珀纸境",
+        description: "奶油纸页和琥珀点缀，像在桌面上整理实体档案。",
+    },
+    {
+        id: "sage",
+        label: "雨后庭院",
+        description: "低饱和绿调与柔雾背景，视觉更松弛。",
+    },
+    {
+        id: "petal",
+        label: "珊瑚晨雾",
+        description: "柔和珊瑚色和清晨云雾感，页面更有呼吸感。",
+    },
+];
+const THEMES = new Set(THEME_DEFINITIONS.map((theme) => theme.id));
+const DEFAULT_THEME = "workspace";
 const DEFAULT_BDPAN_DAILY_TIME = "02:00";
 
 const state = {
@@ -49,6 +82,7 @@ const state = {
 const selectFolderBtn = document.getElementById("selectFolderBtn");
 const analyzeBtn = document.getElementById("analyzeBtn");
 const themeSelect = document.getElementById("themeSelect");
+const themeDescription = document.getElementById("themeDescription");
 const selectedPath = document.getElementById("selectedPath");
 const explorerStats = document.getElementById("explorerStats");
 const explorerTree = document.getElementById("explorerTree");
@@ -78,6 +112,8 @@ const confirmBtn = document.getElementById("confirmBtn");
 const newAnalysisBtn = document.getElementById("newAnalysisBtn");
 const rollbackBtn = document.getElementById("rollbackBtn");
 const cancelBtn = document.getElementById("cancelBtn");
+
+renderThemeOptions();
 
 themeSelect.addEventListener("change", (event) => {
     applyTheme(event.target.value);
@@ -1710,6 +1746,11 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                     .map((item) => item.error)
                     .filter(Boolean)
                     .join("；");
+                const readmeMessage = readmeGenerated
+                    ? " 已在打开文件夹的根目录写入 README.md。"
+                    : readmeError
+                    ? ` README.md 写入失败：${readmeError}`
+                    : "";
 
                 state.lastResult = {
                     type: readmeError ? "error" : "warning",
@@ -1717,13 +1758,17 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                         `本轮成功执行 ${successCount} 条，已丢弃 ${discardedCount} 条无法执行的建议。` +
                         (remainingCount > 0 ? ` 剩余 ${remainingCount} 条待确认。` : "") +
                         (discardedSummary ? ` 丢弃原因：${discardedSummary}` : "") +
-                        (readmeError ? ` README.md 写入失败：${readmeError}` : ""),
+                        readmeMessage,
                     at: Date.now(),
                 };
                 setAnalysisStatus(
                     readmeError ? "error" : "warning",
                     remainingCount > 0
-                        ? `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认。`
+                        ? readmeGenerated
+                            ? `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认，README 已写入根目录。`
+                            : `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认。`
+                        : readmeGenerated
+                        ? `已自动丢弃 ${discardedCount} 条无法执行的建议，README 已写入根目录。`
                         : `已自动丢弃 ${discardedCount} 条无法执行的建议。`
                 );
             }
@@ -1893,15 +1938,29 @@ function escapeHtml(value) {
 
 function initializeTheme() {
     const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    applyTheme(storedTheme && THEMES.has(storedTheme) ? storedTheme : "workspace");
+    applyTheme(storedTheme && THEMES.has(storedTheme) ? storedTheme : DEFAULT_THEME);
 }
 
 function applyTheme(themeName) {
-    const normalizedTheme = THEMES.has(themeName) ? themeName : "workspace";
+    const normalizedTheme = THEMES.has(themeName) ? themeName : DEFAULT_THEME;
+    const theme = getThemeDefinition(normalizedTheme);
     state.currentTheme = normalizedTheme;
     document.body.dataset.theme = normalizedTheme;
     themeSelect.value = normalizedTheme;
     localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+    if (themeDescription) {
+        themeDescription.textContent = `${theme.label} · ${theme.description}`;
+    }
+}
+
+function renderThemeOptions() {
+    themeSelect.innerHTML = THEME_DEFINITIONS.map(
+        (theme) => `<option value="${theme.id}">${theme.label}</option>`
+    ).join("");
+}
+
+function getThemeDefinition(themeName) {
+    return THEME_DEFINITIONS.find((theme) => theme.id === themeName) || THEME_DEFINITIONS[0];
 }
 
 initializeTheme();

@@ -21,7 +21,7 @@ try:
 except ImportError:  # pragma: no cover - fallback for root-level imports
     from backend.command_runtime import CommandRuntime
 
-load_dotenv()
+load_dotenv(os.getenv("OPENCLAW_FILES_ENV", "").strip() or None)
 
 
 class GatewayClient:
