@@ -62,7 +62,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
 
             folder_path = data.get("folder_path")
-            result = analyzer.analyze_folder(folder_path)
+            mode = data.get("mode")
+            target_root_path = data.get("target_root_path")
+            result = analyzer.analyze_folder(
+                folder_path,
+                mode=mode,
+                target_root_path=target_root_path,
+            )
             self._set_headers()
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
             return
@@ -81,10 +87,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             folder_path = data.get("folder_path")
             operations = data.get("operations")
             write_readme = bool(data.get("write_readme"))
+            mode = data.get("mode")
+            target_root_path = data.get("target_root_path")
             result = analyzer.execute_plan(
                 folder_path,
                 operations,
                 write_readme=write_readme,
+                mode=mode,
+                target_root_path=target_root_path,
             )
             if result.get("success"):
                 previous_backup = RequestHandler.current_backup or []

@@ -1284,3 +1284,67 @@ npm run build
 - 版本：1.0.0
 - 最后更新：2026-03-19
 - 已推送到 GitHub：`https://github.com/lpz7777777/OpenClaw_Files`
+
+---
+
+## 二十、2026-03-19 补充：微信文件清理功能
+
+本轮新增了一个围绕“微信文件归档”场景的专项入口，复用了现有的 OpenClaw 分析、可确认执行、自动丢弃和回滚链路，但把“源目录”和“目标目录”拆成了两个独立根路径：
+
+- 顶部工具栏新增“微信文件清理”按钮
+- 左键点击会按照当前已保存的微信配置直接启动专项分析
+- 右键点击会弹出配置窗口，可填写：
+  - 微信文件夹
+  - 整理目标文件夹
+- 前端会把本次分析模式标记为 `wechat_cleanup`
+- 后端 `analyze` / `execute` 接口新增 `mode` 与 `target_root_path`
+
+### 1. 微信专项整理方式
+
+微信清理模式下：
+
+- `source` 路径始终相对于“微信文件夹”
+- `target` 路径始终相对于“整理目标文件夹”
+- OpenClaw 负责生成专项整理思路和摘要
+- 后端会结合当前目录扫描结果，稳定生成按文件类型归档的实际操作列表
+- 默认会把文件归入：
+  - `图片`
+  - `视频`
+  - `音频`
+  - `文档`
+  - `表格`
+  - `演示`
+  - `压缩包`
+  - `音视频`
+  - `其他`
+
+### 2. 去重与执行稳定性
+
+为了满足“去除重复文件”的需求，本轮额外补了两层能力：
+
+- 分析阶段会基于文件内容哈希识别源目录中的完全重复文件
+- 对重复项只保留一份，其余生成 `delete` 建议
+- 如果目标目录中已经存在同内容同名文件，执行器会继续按“重复文件去重成功”处理
+- 如果目标目录中存在同名但不同内容文件，则自动改成 `文件名 (2)` 这类安全目标名，避免覆盖用户已有内容
+
+### 3. 执行器扩展
+
+原先执行器默认只允许在当前打开目录内移动文件。本轮改为：
+
+- 标准整理模式：仍然限制在当前目录内部
+- 微信清理模式：允许把文件从源目录安全移动到用户指定的目标目录
+- 回滚也同步支持跨目录移动恢复
+- 微信专项模式下不生成根目录 `README.md`，避免把“归档说明”写回微信源目录
+
+### 4. 本轮验证
+
+- `node --check renderer.js`
+- `python -m py_compile backend/file_analyzer.py backend/server.py`
+
+### 5. 涉及文件
+
+- [backend/file_analyzer.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py)
+- [backend/server.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)

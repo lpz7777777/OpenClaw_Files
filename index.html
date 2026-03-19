@@ -40,6 +40,13 @@
                             <select id="themeSelect" class="theme-select"></select>
                         </div>
                     </div>
+                    <button
+                        id="wechatCleanupBtn"
+                        class="secondary-btn"
+                        title="左键开始微信文件清理，右键配置微信源目录和目标目录"
+                    >
+                        微信文件清理
+                    </button>
                     <button id="selectFolderBtn" class="primary-btn">打开文件夹</button>
                     <button id="analyzeBtn" class="secondary-btn">重新分析</button>
                 </div>
@@ -209,6 +216,53 @@
             </aside>
         </main>
     </div>
+
+    <dialog id="wechatCleanupDialog" class="config-dialog">
+        <form method="dialog" class="config-dialog-card">
+            <div class="config-dialog-header">
+                <div>
+                    <p class="panel-kicker">WeChat Cleanup</p>
+                    <h2>微信文件清理配置</h2>
+                </div>
+                <button id="wechatCleanupCloseBtn" class="ghost-btn" type="submit" value="cancel">关闭</button>
+            </div>
+
+            <div class="config-dialog-body">
+                <label class="field-group">
+                    <span>微信文件夹</span>
+                    <div class="path-input-row">
+                        <input
+                            id="wechatSourcePathInput"
+                            class="text-input"
+                            type="text"
+                            placeholder="例如 D:\\WeChat Files\\wxid_xxx\\FileStorage"
+                        >
+                        <button id="wechatSourceBrowseBtn" class="secondary-btn" type="button">浏览</button>
+                    </div>
+                    <small>这里填写或选择需要清理的微信文件目录。</small>
+                </label>
+
+                <label class="field-group">
+                    <span>整理目标文件夹</span>
+                    <div class="path-input-row">
+                        <input
+                            id="wechatTargetPathInput"
+                            class="text-input"
+                            type="text"
+                            placeholder="例如 D:\\Sorted\\WeChat"
+                        >
+                        <button id="wechatTargetBrowseBtn" class="secondary-btn" type="button">浏览</button>
+                    </div>
+                    <small>清理时会把保留文件按类型整理到这里，并自动去除重复文件。</small>
+                </label>
+            </div>
+
+            <div class="config-dialog-actions">
+                <button id="wechatCleanupSaveBtn" class="secondary-btn" type="button">保存配置</button>
+                <button id="wechatCleanupRunBtn" class="primary-btn" type="button">保存并开始</button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="renderer.js"></script>
 </body>

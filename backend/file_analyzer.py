@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import tempfile
+import hashlib
 from collections import Counter
 from datetime import datetime
 
@@ -65,6 +66,25 @@ ANALYSIS_PROMPT_PROFILES = [
         "min_file_limit": 32,
     },
 ]
+WECHAT_CLEANUP_MODE = "wechat_cleanup"
+WECHAT_TYPE_FOLDER_MAP = {
+    "document": "文档",
+    "spreadsheet": "表格",
+    "presentation": "演示",
+    "image": "图片",
+    "archive": "压缩包",
+    "media": "音视频",
+    "other": "其他",
+}
+WECHAT_TYPE_REASON_MAP = {
+    "document": "按文档类材料集中归档，便于后续检索和查阅。",
+    "spreadsheet": "按表格类文件集中归档，便于后续统计和汇总。",
+    "presentation": "按演示文件集中归档，便于后续展示和汇报。",
+    "image": "按图片类文件集中归档，减少微信目录中的散落图片。",
+    "archive": "按压缩包集中归档，便于后续统一处理。",
+    "media": "按音视频文件集中归档，避免和文档资料混放。",
+    "other": "暂时归入其他类型，后续可再按需要细分。",
+}
 
 
 class FileAnalyzer:
@@ -99,26 +119,46 @@ class FileAnalyzer:
             self.client = anthropic.Anthropic(api_key=api_key)
             print("[FileAnalyzer] Using direct Anthropic API mode")
 
-    def analyze_folder(self, folder_path):
+    def analyze_folder(self, folder_path, mode="standard", target_root_path=None):
         """Analyze a folder and generate a cleanup plan."""
         last_error = None
         try:
+            normalized_mode = self._normalize_analysis_mode(mode)
+            normalized_target_root_path = self._normalize_optional_target_root_path(
+                target_root_path
+            )
+            if (
+                normalized_mode == WECHAT_CLEANUP_MODE
+                and not normalized_target_root_path
+            ):
+                raise ValueError("微信文件清理模式需要提供目标文件夹。")
+
             structure = self._get_folder_structure(folder_path)
 
             for index, prompt_profile in enumerate(ANALYSIS_PROMPT_PROFILES):
                 try:
-                    prompt = self._build_analysis_prompt(
+                    prompt = self._build_prompt_for_mode(
+                        normalized_mode,
                         folder_path,
                         structure,
+                        target_root_path=normalized_target_root_path,
                         prompt_profile=prompt_profile,
                     )
                     response_text = self._generate_text(prompt)
                     plan = self._parse_plan_response(response_text)
-                    plan = self._enrich_plan_with_heuristics(plan, structure)
+                    plan = self._enrich_plan_for_mode(
+                        normalized_mode,
+                        plan,
+                        folder_path,
+                        structure,
+                        target_root_path=normalized_target_root_path,
+                    )
                     return {
                         "success": True,
                         "plan": plan,
                         "folder_structure": structure,
+                        "mode": normalized_mode,
+                        "target_root_path": normalized_target_root_path,
                     }
                 except Exception as exc:
                     last_error = exc
@@ -137,6 +177,58 @@ class FileAnalyzer:
                 "success": False,
                 "error": str(last_error or exc),
             }
+
+    def _normalize_analysis_mode(self, mode):
+        normalized_mode = str(mode or "").strip().lower()
+        if normalized_mode == WECHAT_CLEANUP_MODE:
+            return WECHAT_CLEANUP_MODE
+        return "standard"
+
+    def _normalize_optional_target_root_path(self, target_root_path):
+        normalized_path = str(target_root_path or "").strip()
+        if not normalized_path:
+            return ""
+        return os.path.abspath(normalized_path)
+
+    def _build_prompt_for_mode(
+        self,
+        mode,
+        folder_path,
+        structure,
+        target_root_path="",
+        prompt_profile=None,
+    ):
+        if mode == WECHAT_CLEANUP_MODE:
+            return self._build_wechat_cleanup_prompt(
+                folder_path,
+                target_root_path,
+                structure,
+                prompt_profile=prompt_profile,
+            )
+
+        return self._build_analysis_prompt(
+            folder_path,
+            structure,
+            prompt_profile=prompt_profile,
+        )
+
+    def _enrich_plan_for_mode(
+        self,
+        mode,
+        plan,
+        folder_path,
+        structure,
+        target_root_path="",
+    ):
+        if mode == WECHAT_CLEANUP_MODE:
+            return self._enrich_wechat_cleanup_plan(
+                plan,
+                folder_path,
+                structure,
+                target_root_path=target_root_path,
+            )
+
+        return self._enrich_plan_with_heuristics(plan, structure)
 
     def _build_analysis_prompt(self, folder_path, structure, prompt_profile=None):
         prompt_profile = prompt_profile or ANALYSIS_PROMPT_PROFILES[0]
@@ -176,6 +268,48 @@ class FileAnalyzer:
 
 只返回 JSON，格式如下：
 {{"summary":"整体整理思路","summary_points":["摘要1","摘要2"],"categories":["分类1","分类2"],"operations":[{{"type":"move|rename|rename_folder|create_folder|delete","source":"relative/path","target":"relative/path","reason":"说明原因"}}]}}
+"""
+
+    def _build_wechat_cleanup_prompt(
+        self,
+        folder_path,
+        target_root_path,
+        structure,
+        prompt_profile=None,
+    ):
+        prompt_profile = prompt_profile or ANALYSIS_PROMPT_PROFILES[0]
+        prompt_payload = self._build_prompt_payload(structure, prompt_profile)
+        file_count = prompt_payload.get("prompt_view", {}).get("file_index_included", 0)
+        required_operation_count = min(max(file_count, 8), 60)
+        payload_json = json.dumps(
+            prompt_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+        return f"""请基于下面的目录摘要，为“微信文件清理”生成一个稳妥的整理计划。
+
+源文件夹：{folder_path}
+目标文件夹：{target_root_path}
+
+任务目标：
+1. 将源文件夹中的微信文件整理到目标文件夹中，而不是在源目录内部原地重组。
+2. 目标文件夹中的结构需要按文件类型分类整理，例如图片、音视频、文档、表格、演示、压缩包、其他等；可按实际文件情况细化，但结构必须清晰稳定。
+3. 对明显重复、临时、缓存、锁定、缩略图性质的文件，可以建议删除；其余文件优先保留并移动到目标文件夹。
+
+请严格遵守：
+1. 重点先看 file_index，再决定如何分类，不要只根据文件夹名猜测。
+2. 所有 source 都必须相对于“源文件夹”；所有 target 都必须相对于“目标文件夹”。不要输出绝对路径，不要把目标文件夹名写进 target。
+3. 优先使用 create_folder + move。只有在确定是重复文件、Office 锁定文件、缓存或明显无价值临时文件时才使用 delete。
+4. 如果文件需要改名再归档，也优先直接通过 move 的目标文件名表达，不必为了改名单独使用 rename。
+5. 尽量输出不少于 {required_operation_count} 条有把握的操作；如果没有足够安全的操作，只输出安全部分。
+6. 输出必须是严格合法 JSON，只能使用双引号，不能附带 Markdown 或解释文字。
+
+数据：
+{payload_json}
+
+只返回 JSON，格式如下：
+{{"summary":"整体整理思路","summary_points":["摘要1","摘要2"],"categories":["分类1","分类2"],"operations":[{{"type":"move|create_folder|delete","source":"relative/path","target":"relative/path","reason":"说明原因"}}]}}
 """
 
     def _build_prompt_payload(self, structure, prompt_profile):
@@ -600,6 +734,291 @@ Correct JSON examples:
             "operations": normalized_operations,
         }
 
+    def _enrich_wechat_cleanup_plan(
+        self,
+        plan,
+        folder_path,
+        structure,
+        target_root_path="",
+    ):
+        deterministic_operations, target_directories, duplicate_count = (
+            self._generate_wechat_cleanup_operations(
+                folder_path,
+                structure,
+                target_root_path,
+            )
+        )
+        operations = deterministic_operations or list(plan.get("operations", []))
+
+        auto_categories = ["微信专项清理", "按文件类型归档"]
+        if duplicate_count > 0 or any(
+            operation.get("type") == "delete" for operation in operations
+        ):
+            auto_categories.append("重复文件与临时文件清理")
+
+        categories = []
+        for category in list(plan.get("categories", [])) + auto_categories:
+            normalized_category = str(category or "").strip()
+            if normalized_category and normalized_category not in categories:
+                categories.append(normalized_category)
+
+        auto_summary_points = []
+        if target_root_path:
+            auto_summary_points.append(
+                f"本轮会把微信文件从源目录整理到目标目录：{target_root_path}"
+            )
+        if target_directories:
+            auto_summary_points.append(
+                "保留文件会按类型归入这些目录："
+                + "、".join(target_directories[:6])
+                + (" 等。" if len(target_directories) > 6 else "。")
+            )
+        if duplicate_count > 0:
+            auto_summary_points.append(
+                f"检测到 {duplicate_count} 个完全重复或明显临时的文件，计划直接去重或清理。"
+            )
+
+        summary_points = self._merge_summary_points_with_operations(
+            auto_summary_points + list(plan.get("summary_points", [])),
+            operations,
+        )
+        summary = str(plan.get("summary", "")).strip()
+        if not summary and summary_points:
+            summary = "；".join(summary_points[:3])
+
+        return {
+            "summary": summary or "微信文件将按类型整理到目标目录，并清理重复或临时文件。",
+            "summary_points": summary_points,
+            "categories": categories,
+            "operations": operations,
+        }
+
+    def _generate_wechat_cleanup_operations(
+        self,
+        folder_path,
+        structure,
+        target_root_path,
+    ):
+        file_entries = self._collect_wechat_cleanup_file_entries(folder_path, structure)
+        duplicate_lookup = self._build_duplicate_lookup(file_entries)
+        operations = []
+        seen_operations = set()
+        reserved_targets = set()
+        target_directories = []
+        delete_count = 0
+
+        def append_operation(op_type, source="", target="", reason=""):
+            normalized_source = self._normalize_relative_path(source)
+            normalized_target = self._normalize_relative_path(target)
+            key = (op_type, normalized_source, normalized_target)
+            if key in seen_operations:
+                return
+
+            operations.append(
+                {
+                    "type": op_type,
+                    "source": normalized_source if op_type != "create_folder" else "",
+                    "target": normalized_target if op_type != "delete" else "",
+                    "reason": reason or "未提供原因",
+                }
+            )
+            seen_operations.add(key)
+
+        for entry in file_entries:
+            relative_path = entry["relative_path"]
+            file_name = entry["name"]
+            if file_name.startswith("~$"):
+                append_operation(
+                    "delete",
+                    source=relative_path,
+                    reason="Office 锁定临时文件不属于正式资料，可直接清理。",
+                )
+                delete_count += 1
+                continue
+
+            duplicate_of = duplicate_lookup.get(relative_path)
+            if duplicate_of:
+                append_operation(
+                    "delete",
+                    source=relative_path,
+                    reason=f"与 {duplicate_of} 内容完全一致，保留一份即可。",
+                )
+                delete_count += 1
+                continue
+
+            target_directory, move_reason = self._get_wechat_cleanup_target_for_file(entry)
+            if target_directory not in target_directories:
+                target_directories.append(target_directory)
+                append_operation(
+                    "create_folder",
+                    target=target_directory,
+                    reason=f"为微信文件建立“{target_directory}”分类目录。",
+                )
+
+            target_relative_path = self._build_unique_target_relative_path(
+                target_root_path,
+                target_directory,
+                file_name,
+                entry["absolute_path"],
+                reserved_targets,
+            )
+            reserved_targets.add(target_relative_path)
+            append_operation(
+                "move",
+                source=relative_path,
+                target=target_relative_path,
+                reason=move_reason,
+            )
+
+        return operations, target_directories, delete_count
+
+    def _collect_wechat_cleanup_file_entries(self, folder_path, structure):
+        entries = []
+        for node in self._iter_directory_nodes(structure.get("tree", {})):
+            for file_info in node.get("files", []):
+                relative_path = self._normalize_relative_path(
+                    file_info.get("relative_path", "")
+                )
+                if not relative_path:
+                    continue
+
+                file_name = file_info.get("name") or os.path.basename(relative_path)
+                extension = str(file_info.get("extension", "")).lower()
+                classification = self._classify_file_entry(
+                    relative_path,
+                    extension,
+                    file_name,
+                )
+                entries.append(
+                    {
+                        "relative_path": relative_path,
+                        "absolute_path": self._resolve_operation_path_in_root(
+                            folder_path,
+                            relative_path,
+                        ),
+                        "name": file_name,
+                        "extension": extension or "[no_ext]",
+                        "type_group": classification.get("type_group") or "other",
+                        "size": int(file_info.get("size", 0) or 0),
+                    }
+                )
+
+        entries.sort(key=lambda item: item["relative_path"])
+        return entries
+
+    def _build_duplicate_lookup(self, file_entries):
+        size_buckets = {}
+        duplicate_lookup = {}
+
+        for entry in file_entries:
+            size_buckets.setdefault(entry.get("size", 0), []).append(entry)
+
+        for bucket in size_buckets.values():
+            if len(bucket) < 2:
+                continue
+
+            hash_buckets = {}
+            for entry in bucket:
+                file_hash = self._compute_file_hash(entry["absolute_path"])
+                if not file_hash:
+                    continue
+                hash_buckets.setdefault(file_hash, []).append(entry)
+
+            for duplicate_group in hash_buckets.values():
+                if len(duplicate_group) < 2:
+                    continue
+
+                ordered_group = sorted(
+                    duplicate_group,
+                    key=self._wechat_cleanup_duplicate_sort_key,
+                )
+                canonical_entry = ordered_group[0]
+                for duplicate_entry in ordered_group[1:]:
+                    duplicate_lookup[duplicate_entry["relative_path"]] = canonical_entry[
+                        "relative_path"
+                    ]
+
+        return duplicate_lookup
+
+    def _compute_file_hash(self, file_path):
+        if not os.path.isfile(file_path):
+            return ""
+
+        digest = hashlib.sha256()
+        chunk_size = 1024 * 1024
+        with open(file_path, "rb") as file_handle:
+            while True:
+                chunk = file_handle.read(chunk_size)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _wechat_cleanup_duplicate_sort_key(self, entry):
+        file_name = str(entry.get("name") or "")
+        duplicate_suffix_match = re.search(r"\(\d+\)(\.[^.]+)?$", file_name)
+        return (
+            1 if duplicate_suffix_match else 0,
+            self._path_depth(entry.get("relative_path", "")),
+            len(file_name),
+            entry.get("relative_path", ""),
+        )
+
+    def _get_wechat_cleanup_target_for_file(self, entry):
+        extension = str(entry.get("extension") or "").lower()
+        type_group = str(entry.get("type_group") or "other").lower()
+
+        if extension in {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".m4v"}:
+            folder_name = "视频"
+            reason = "按视频类文件集中归档，便于后续查找与回看。"
+        elif extension in {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}:
+            folder_name = "音频"
+            reason = "按音频类文件集中归档，避免和文档资料混放。"
+        else:
+            folder_name = WECHAT_TYPE_FOLDER_MAP.get(type_group, WECHAT_TYPE_FOLDER_MAP["other"])
+            reason = WECHAT_TYPE_REASON_MAP.get(type_group, WECHAT_TYPE_REASON_MAP["other"])
+
+        return folder_name, reason
+
+    def _build_unique_target_relative_path(
+        self,
+        target_root_path,
+        target_directory,
+        file_name,
+        source_absolute_path,
+        reserved_targets,
+    ):
+        candidate = self._join_relative_path(target_directory, file_name)
+        while True:
+            if candidate not in reserved_targets:
+                existing_target_path = self._resolve_optional_root_target_path(
+                    target_root_path,
+                    candidate,
+                )
+                if not os.path.exists(existing_target_path):
+                    return candidate
+                if self._files_have_same_content(source_absolute_path, existing_target_path):
+                    return candidate
+
+            candidate = self._append_copy_suffix(candidate)
+
+    def _resolve_optional_root_target_path(self, root_path, relative_path):
+        if not root_path:
+            return relative_path
+        return self._resolve_operation_path_in_root(root_path, relative_path)
+
+    def _append_copy_suffix(self, relative_path):
+        parent = self._normalize_relative_path(os.path.dirname(relative_path))
+        name = os.path.basename(relative_path)
+        stem, extension = os.path.splitext(name)
+        match = re.search(r"^(.*) \((\d+)\)$", stem)
+        if match:
+            stem = match.group(1)
+            next_index = int(match.group(2)) + 1
+        else:
+            next_index = 2
+        return self._join_relative_path(parent, f"{stem} ({next_index}){extension}")
+
     def _normalize_relative_path(self, raw_path) -> str:
         normalized = str(raw_path or "").strip().replace("\\", "/")
         normalized = re.sub(r"/{2,}", "/", normalized)
@@ -730,15 +1149,15 @@ Correct JSON examples:
     def _display_relative_path(self, relative_path) -> str:
         return str(relative_path or "").replace("\\", "/")
 
-    def _resolve_operation_path(self, folder_path, relative_path) -> str:
+    def _resolve_operation_path_in_root(self, root_path, relative_path) -> str:
         normalized_relative_path = self._normalize_relative_path(relative_path)
         if not normalized_relative_path or normalized_relative_path == ".":
             raise ValueError("Operation path cannot point to the selected root folder")
 
         candidate = os.path.normpath(
-            os.path.join(folder_path, normalized_relative_path.replace("/", os.sep))
+            os.path.join(root_path, normalized_relative_path.replace("/", os.sep))
         )
-        folder_real = os.path.realpath(folder_path)
+        folder_real = os.path.realpath(root_path)
         candidate_real = os.path.realpath(candidate)
 
         if os.path.commonpath([folder_real, candidate_real]) != folder_real:
@@ -746,10 +1165,17 @@ Correct JSON examples:
 
         return candidate
 
+    def _resolve_operation_path(self, folder_path, relative_path) -> str:
+        return self._resolve_operation_path_in_root(folder_path, relative_path)
+
     def _ensure_parent_directory(self, target_path):
         parent = os.path.dirname(target_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
+
+    def _move_entry(self, source_path, target_path):
+        self._ensure_parent_directory(target_path)
+        shutil.move(source_path, target_path)
 
     def _build_delete_backup_path(self, backup_root, relative_source_path):
         normalized_relative_path = self._normalize_relative_path(relative_source_path)
@@ -821,7 +1247,7 @@ Correct JSON examples:
         )
         backup_target = self._build_unique_backup_target(backup_target)
         self._ensure_parent_directory(backup_target)
-        os.rename(source_path, backup_target)
+        self._move_entry(source_path, backup_target)
         return backup_root, backup_target
 
     def _merge_directory_into_existing_target(self, source_path, target_path, relative_prefix=""):
@@ -838,7 +1264,7 @@ Correct JSON examples:
             relative_child_path = self._join_relative_path(relative_prefix, child_name)
 
             if not os.path.exists(target_child):
-                os.rename(source_child, target_child)
+                self._move_entry(source_child, target_child)
                 moved_entries.append(relative_child_path)
                 continue
 
@@ -1733,13 +2159,29 @@ Correct JSON examples:
             },
         }
 
-    def execute_plan(self, folder_path, operations, write_readme=False):
+    def execute_plan(
+        self,
+        folder_path,
+        operations,
+        write_readme=False,
+        mode="standard",
+        target_root_path="",
+    ):
         """Execute file and folder operations."""
         results = []
         backup_info = []
         delete_backup_root = None
         applied_path_rewrites = []
         failed_renames = []
+        normalized_mode = self._normalize_analysis_mode(mode)
+        normalized_target_root_path = self._normalize_optional_target_root_path(
+            target_root_path
+        )
+
+        if normalized_mode == WECHAT_CLEANUP_MODE and not normalized_target_root_path:
+            return {"success": False, "error": "微信文件清理执行时缺少目标文件夹。"}
+
+        write_readme = bool(write_readme and normalized_mode != WECHAT_CLEANUP_MODE)
 
         try:
             for operation in self._sort_operations_for_execution(operations):
@@ -1762,7 +2204,8 @@ Correct JSON examples:
                     target_relative_path
                 )
                 if (
-                    op_type in {"move", "rename", "rename_folder"}
+                    normalized_mode != WECHAT_CLEANUP_MODE
+                    and op_type in {"move", "rename", "rename_folder"}
                     and normalized_source_relative_path
                     and normalized_source_relative_path == normalized_target_relative_path
                 ):
@@ -1775,13 +2218,22 @@ Correct JSON examples:
                     continue
 
                 try:
+                    target_root_for_operation = (
+                        normalized_target_root_path
+                        if normalized_mode == WECHAT_CLEANUP_MODE
+                        and op_type in {"move", "rename", "rename_folder", "create_folder"}
+                        else folder_path
+                    )
                     source = (
                         self._resolve_operation_path(folder_path, source_relative_path)
                         if op_type != "create_folder"
                         else ""
                     )
                     target = (
-                        self._resolve_operation_path(folder_path, target_relative_path)
+                        self._resolve_operation_path(
+                            target_root_for_operation,
+                            target_relative_path,
+                        )
                         if target_relative_path
                         else ""
                     )
@@ -1837,7 +2289,10 @@ Correct JSON examples:
                         operation_already_applied = True
 
                     if operation_already_applied:
-                        if op_type == "rename_folder":
+                        if (
+                            normalized_mode != WECHAT_CLEANUP_MODE
+                            and op_type == "rename_folder"
+                        ):
                             applied_path_rewrites.append(
                                 {
                                     "source": operation.get("source", ""),
@@ -1900,8 +2355,7 @@ Correct JSON examples:
                                     target,
                                 )
                             else:
-                                self._ensure_parent_directory(target)
-                                os.rename(source, target)
+                                self._move_entry(source, target)
                         else:
                             if os.path.exists(target):
                                 if self._files_have_same_content(source, target):
@@ -1929,8 +2383,7 @@ Correct JSON examples:
                                     )
                                     continue
                             else:
-                                self._ensure_parent_directory(target)
-                                os.rename(source, target)
+                                self._move_entry(source, target)
                     elif op_type == "rename":
                         if os.path.isdir(source):
                             results.append(
@@ -1967,8 +2420,7 @@ Correct JSON examples:
                                 )
                                 continue
                         else:
-                            self._ensure_parent_directory(target)
-                            os.rename(source, target)
+                            self._move_entry(source, target)
                     elif op_type == "rename_folder":
                         if not os.path.isdir(source):
                             results.append(
@@ -1994,8 +2446,7 @@ Correct JSON examples:
                                 source, target
                             )
                         else:
-                            self._ensure_parent_directory(target)
-                            os.rename(source, target)
+                            self._move_entry(source, target)
                     elif op_type == "delete":
                         delete_backup_root, backup_target = self._backup_duplicate_source(
                             folder_path,
@@ -2039,7 +2490,9 @@ Correct JSON examples:
                         }
                     )
 
-                if op_type == "rename_folder" or (op_type == "move" and source_was_directory):
+                if normalized_mode != WECHAT_CLEANUP_MODE and (
+                    op_type == "rename_folder" or (op_type == "move" and source_was_directory)
+                ):
                     applied_path_rewrites.append(
                         {
                             "source": operation.get("source", ""),
@@ -2120,7 +2573,7 @@ Correct JSON examples:
                             os.remove(target)
                         if source and os.path.exists(source):
                             self._ensure_parent_directory(target)
-                            os.rename(source, target)
+                            self._move_entry(source, target)
                     elif target and os.path.exists(target):
                         os.remove(target)
                     continue
@@ -2134,7 +2587,7 @@ Correct JSON examples:
                             source_child = os.path.join(source, child_name)
                             if os.path.exists(target_child):
                                 self._ensure_parent_directory(source_child)
-                                os.rename(target_child, source_child)
+                                self._move_entry(target_child, source_child)
                         continue
 
                     if target and os.path.exists(target):
@@ -2153,18 +2606,18 @@ Correct JSON examples:
                                 )
                             self._merge_directory_into_existing_target(target, source)
                         else:
-                            os.rename(target, source)
+                            self._move_entry(target, source)
                     continue
 
                 if op_type == "delete":
                     if target and os.path.exists(target):
                         self._ensure_parent_directory(source)
-                        os.rename(target, source)
+                        self._move_entry(target, source)
                     continue
 
                 if target and os.path.exists(target):
                     self._ensure_parent_directory(source)
-                    os.rename(target, source)
+                    self._move_entry(target, source)
 
             for temp_root in temp_roots:
                 shutil.rmtree(temp_root, ignore_errors=True)

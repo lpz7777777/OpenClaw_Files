@@ -19,6 +19,8 @@ const PREVIEW_BYTE_LIMIT = 200 * 1024; // 文件预览大小限制（200KB）
 const WORD_EXTENSIONS = new Set([".doc", ".docx"]); // Word 文档扩展名
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]); // Excel 表格扩展名
 const THEME_STORAGE_KEY = "openclaw-workspace-theme"; // 主题存储键名
+const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
+const WECHAT_CLEANUP_MODE = "wechat_cleanup";
 
 /**
  * 主题定义
@@ -93,12 +95,19 @@ const state = {
     bdpanTimezoneEdited: false,
     isCloudSyncBusy: false,
     isCloudSyncLoading: false,
+    analysisMode: "standard",
+    analysisTargetRootPath: "",
+    wechatCleanupConfig: {
+        sourcePath: "",
+        targetPath: "",
+    },
 };
 
 /**
  * DOM 元素引用
  */
 const selectFolderBtn = document.getElementById("selectFolderBtn"); // 选择文件夹按钮
+const wechatCleanupBtn = document.getElementById("wechatCleanupBtn"); // 微信清理按钮
 const analyzeBtn = document.getElementById("analyzeBtn"); // 分析按钮
 const themeSelect = document.getElementById("themeSelect"); // 主题选择器
 const themeDescription = document.getElementById("themeDescription"); // 主题描述
@@ -131,6 +140,13 @@ const confirmBtn = document.getElementById("confirmBtn"); // 确认按钮
 const newAnalysisBtn = document.getElementById("newAnalysisBtn"); // 重新分析按钮
 const rollbackBtn = document.getElementById("rollbackBtn"); // 回滚按钮
 const cancelBtn = document.getElementById("cancelBtn"); // 取消按钮
+const wechatCleanupDialog = document.getElementById("wechatCleanupDialog"); // 微信清理弹窗
+const wechatSourcePathInput = document.getElementById("wechatSourcePathInput"); // 微信源目录输入
+const wechatTargetPathInput = document.getElementById("wechatTargetPathInput"); // 微信目标目录输入
+const wechatSourceBrowseBtn = document.getElementById("wechatSourceBrowseBtn"); // 微信源目录浏览
+const wechatTargetBrowseBtn = document.getElementById("wechatTargetBrowseBtn"); // 微信目标目录浏览
+const wechatCleanupSaveBtn = document.getElementById("wechatCleanupSaveBtn"); // 微信清理保存
+const wechatCleanupRunBtn = document.getElementById("wechatCleanupRunBtn"); // 微信清理执行
 
 /**
  * 初始化主题选项
@@ -183,6 +199,15 @@ selectFolderBtn.addEventListener("click", async () => {
     await openFolder(folderPath);
 });
 
+wechatCleanupBtn.addEventListener("click", async () => {
+    await runWechatCleanup();
+});
+
+wechatCleanupBtn.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    openWechatCleanupDialog();
+});
+
 /**
  * 分析按钮点击事件
  */
@@ -224,7 +249,7 @@ confirmBtn.addEventListener("click", async () => {
     await executeOperations(
         pending.map(({ index }) => index),
         `正在执行剩余的 ${pending.length} 条操作，请稍候...`,
-        { writeReadme: true }
+        { writeReadme: state.analysisMode !== WECHAT_CLEANUP_MODE }
     );
 });
 
@@ -304,7 +329,43 @@ cancelBtn.addEventListener("click", () => {
     updateActionState();
 });
 
-async function openFolder(folderPath) {
+wechatSourceBrowseBtn.addEventListener("click", async () => {
+    const folderPath = await ipcRenderer.invoke("select-folder");
+    if (folderPath) {
+        wechatSourcePathInput.value = folderPath;
+    }
+});
+
+wechatTargetBrowseBtn.addEventListener("click", async () => {
+    const folderPath = await ipcRenderer.invoke("select-folder");
+    if (folderPath) {
+        wechatTargetPathInput.value = folderPath;
+    }
+});
+
+wechatCleanupSaveBtn.addEventListener("click", () => {
+    const result = persistWechatCleanupConfigFromDialog();
+    if (!result.ok) {
+        window.alert(result.message);
+        return;
+    }
+    wechatCleanupDialog.close("save");
+});
+
+wechatCleanupRunBtn.addEventListener("click", async () => {
+    const result = persistWechatCleanupConfigFromDialog();
+    if (!result.ok) {
+        window.alert(result.message);
+        return;
+    }
+    wechatCleanupDialog.close("run");
+    await runWechatCleanup();
+});
+
+async function openFolder(folderPath, options = {}) {
+    const analysisMode = options.analysisMode === WECHAT_CLEANUP_MODE ? WECHAT_CLEANUP_MODE : "standard";
+    const targetRootPath = String(options.targetRootPath || "").trim();
+
     state.currentFolderPath = folderPath;
     state.currentPlan = null;
     state.lastResult = null;
@@ -313,17 +374,27 @@ async function openFolder(folderPath) {
     state.selectedNodePath = folderPath;
     state.expandedPaths = new Set([folderPath]);
     state.cloudSyncFeedback = null;
+    state.analysisMode = analysisMode;
+    state.analysisTargetRootPath = analysisMode === WECHAT_CLEANUP_MODE ? targetRootPath : "";
     initializeBdpanDefaults(folderPath);
 
-    selectedPath.textContent = folderPath;
+    selectedPath.textContent = buildSelectedPathText();
 
-    setAnalysisStatus("loading", "正在读取目录结构并准备分析...");
+    setAnalysisStatus(
+        "loading",
+        analysisMode === WECHAT_CLEANUP_MODE
+            ? "正在读取微信文件目录并准备专项清理分析..."
+            : "正在读取目录结构并准备分析..."
+    );
     renderAnalysis();
     updateActionState();
 
     await loadFolderTree(folderPath, false);
     openOverviewTab();
-    await analyzeFolder(folderPath);
+    await analyzeFolder(folderPath, {
+        mode: analysisMode,
+        targetRootPath: state.analysisTargetRootPath,
+    });
 }
 
 function initializeBdpanDefaults(folderPath) {
@@ -337,6 +408,86 @@ function initializeBdpanDefaults(folderPath) {
     bdpanRemotePathInput.value = state.bdpanRemotePath;
     bdpanDailyTimeInput.value = state.bdpanDailyTime;
     bdpanTimezoneInput.value = state.bdpanTimezone;
+}
+
+function buildSelectedPathText() {
+    if (!state.currentFolderPath) {
+        return "尚未打开任何文件夹";
+    }
+
+    if (state.analysisMode === WECHAT_CLEANUP_MODE && state.analysisTargetRootPath) {
+        return `${state.currentFolderPath}  →  ${state.analysisTargetRootPath}`;
+    }
+
+    return state.currentFolderPath;
+}
+
+function openWechatCleanupDialog() {
+    wechatSourcePathInput.value = state.wechatCleanupConfig.sourcePath || "";
+    wechatTargetPathInput.value = state.wechatCleanupConfig.targetPath || "";
+    if (!wechatCleanupDialog.open) {
+        wechatCleanupDialog.showModal();
+    }
+}
+
+function normalizeWechatCleanupConfig(config) {
+    return {
+        sourcePath: String(config?.sourcePath || "").trim(),
+        targetPath: String(config?.targetPath || "").trim(),
+    };
+}
+
+function persistWechatCleanupConfigFromDialog() {
+    const config = normalizeWechatCleanupConfig({
+        sourcePath: wechatSourcePathInput.value,
+        targetPath: wechatTargetPathInput.value,
+    });
+
+    if (!config.sourcePath) {
+        return { ok: false, message: "请先填写微信文件夹。" };
+    }
+    if (!config.targetPath) {
+        return { ok: false, message: "请先填写整理目标文件夹。" };
+    }
+    if (path.resolve(config.sourcePath) === path.resolve(config.targetPath)) {
+        return { ok: false, message: "微信文件夹和整理目标文件夹不能相同。" };
+    }
+
+    state.wechatCleanupConfig = config;
+    localStorage.setItem(WECHAT_CLEANUP_STORAGE_KEY, JSON.stringify(config));
+    return { ok: true, config };
+}
+
+function initializeWechatCleanupConfig() {
+    try {
+        const storedConfig = JSON.parse(localStorage.getItem(WECHAT_CLEANUP_STORAGE_KEY) || "{}");
+        state.wechatCleanupConfig = normalizeWechatCleanupConfig(storedConfig);
+    } catch (error) {
+        state.wechatCleanupConfig = { sourcePath: "", targetPath: "" };
+    }
+}
+
+async function runWechatCleanup() {
+    if (state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy) {
+        return;
+    }
+
+    const config = normalizeWechatCleanupConfig(state.wechatCleanupConfig);
+    if (!config.sourcePath || !config.targetPath) {
+        openWechatCleanupDialog();
+        return;
+    }
+
+    if (path.resolve(config.sourcePath) === path.resolve(config.targetPath)) {
+        window.alert("微信文件夹和整理目标文件夹不能相同。");
+        openWechatCleanupDialog();
+        return;
+    }
+
+    await openFolder(config.sourcePath, {
+        analysisMode: WECHAT_CLEANUP_MODE,
+        targetRootPath: config.targetPath,
+    });
 }
 
 async function loadCloudSyncStatus() {
@@ -404,23 +555,44 @@ async function loadFolderTree(folderPath, preserveTabs = true) {
     }
 }
 
-async function analyzeFolder(folderPath) {
+async function analyzeFolder(folderPath, options = {}) {
+    const mode = options.mode || state.analysisMode || "standard";
+    const targetRootPath =
+        mode === WECHAT_CLEANUP_MODE
+            ? String(options.targetRootPath || state.analysisTargetRootPath || "").trim()
+            : "";
+
     state.isAnalyzing = true;
     state.currentPlan = null;
     resetOperationProgress();
     state.canRollback = false;
-    setAnalysisStatus("loading", "OpenClaw 正在分析当前文件夹结构...");
+    state.analysisMode = mode;
+    state.analysisTargetRootPath = targetRootPath;
+    selectedPath.textContent = buildSelectedPathText();
+    setAnalysisStatus(
+        "loading",
+        mode === WECHAT_CLEANUP_MODE
+            ? "OpenClaw 正在分析微信文件，并生成分类整理方案..."
+            : "OpenClaw 正在分析当前文件夹结构..."
+    );
     renderAnalysis();
     updateActionState();
 
     try {
         const response = await axios.post(`${API_BASE}/analyze`, {
             folder_path: folderPath,
+            mode,
+            target_root_path: targetRootPath,
         });
 
         if (response.data.success) {
             state.currentPlan = response.data.plan;
-            setAnalysisStatus("success", "分析完成，右侧已生成更细的整理建议。");
+            setAnalysisStatus(
+                "success",
+                mode === WECHAT_CLEANUP_MODE
+                    ? "微信文件清理方案已生成，右侧可确认执行到目标目录。"
+                    : "分析完成，右侧已生成更细的整理建议。"
+            );
             openOverviewTab();
         } else {
             setAnalysisStatus("error", `分析失败：${response.data.error}`);
@@ -1029,7 +1201,8 @@ function renderAnalysis() {
     } else if (state.isExecutingOperation) {
         analysisMeta.textContent = "执行中";
     } else {
-        analysisMeta.textContent = `${getPendingOperations().length} pending · ${state.treeStats.files} files`;
+        const modeLabel = state.analysisMode === WECHAT_CLEANUP_MODE ? "微信清理" : "标准整理";
+        analysisMeta.textContent = `${modeLabel} · ${getPendingOperations().length} pending · ${state.treeStats.files} files`;
     }
 
     if (state.currentPlan) {
@@ -1471,6 +1644,7 @@ function updateActionState() {
     const hasDailyTime = Boolean(String(state.bdpanDailyTime || "").trim());
     const hasTimezone = Boolean(String(state.bdpanTimezone || "").trim());
 
+    wechatCleanupBtn.disabled = isBusy;
     analyzeBtn.disabled = !hasFolder || isBusy;
     newAnalysisBtn.disabled = !hasFolder || isBusy;
     confirmBtn.disabled = isBusy || operationCount === 0;
@@ -1479,6 +1653,7 @@ function updateActionState() {
     bdpanUploadBtn.disabled = !hasFolder || isBusy || !hasRemotePath;
     bdpanRefreshBtn.disabled = state.isCloudSyncBusy || state.isCloudSyncLoading;
     bdpanScheduleBtn.disabled = !hasFolder || isBusy || !hasRemotePath || !hasDailyTime || !hasTimezone;
+    wechatCleanupRunBtn.disabled = isBusy;
 }
 
 /**
@@ -1725,6 +1900,7 @@ async function executeSingleOperation(index) {
  * @param {Object} options - 选项
  */
 async function executeOperations(indexes, loadingMessage, options = {}) {
+    const isWechatCleanup = state.analysisMode === WECHAT_CLEANUP_MODE;
     const operations = indexes
         .map((index) => {
             const operation = state.currentPlan?.operations?.[index];
@@ -1756,6 +1932,8 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
             folder_path: state.currentFolderPath,
             operations: operations.map(({ operation }) => operation),
             write_readme: Boolean(options.writeReadme),
+            mode: state.analysisMode,
+            target_root_path: state.analysisTargetRootPath,
         });
 
         if (response.data.success) {
@@ -1793,7 +1971,9 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
             }
 
             if (discardedCount === 0) {
-                const baseMessage = options.writeReadme
+                const baseMessage = isWechatCleanup
+                    ? `已完成 ${successCount} 条微信文件整理操作，文件已开始归档到目标目录。`
+                    : options.writeReadme
                     ? `已完成 ${successCount} 条操作，当前整理结果已落盘。`
                     : `已执行 ${successCount} 条操作，剩余 ${remainingCount} 条待确认。`;
                 const readmeMessage = readmeGenerated
@@ -1809,7 +1989,9 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                 };
                 setAnalysisStatus(
                     readmeError ? "error" : "success",
-                    readmeGenerated
+                    isWechatCleanup
+                        ? "微信文件清理操作已执行，源目录与目标目录已同步更新。"
+                        : readmeGenerated
                         ? "全部操作已执行，README 已写入根目录。"
                         : readmeError
                         ? `操作已执行，但 README 写入失败：${readmeError}`
@@ -1830,7 +2012,11 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                 state.lastResult = {
                     type: readmeError ? "error" : "warning",
                     message:
-                        `本轮成功执行 ${successCount} 条，已丢弃 ${discardedCount} 条无法执行的建议。` +
+                        `${
+                            isWechatCleanup
+                                ? `本轮成功执行 ${successCount} 条微信文件整理操作，已丢弃 ${discardedCount} 条无法执行的建议。`
+                                : `本轮成功执行 ${successCount} 条，已丢弃 ${discardedCount} 条无法执行的建议。`
+                        }` +
                         (remainingCount > 0 ? ` 剩余 ${remainingCount} 条待确认。` : "") +
                         (discardedSummary ? ` 丢弃原因：${discardedSummary}` : "") +
                         readmeMessage,
@@ -1838,7 +2024,11 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                 };
                 setAnalysisStatus(
                     readmeError ? "error" : "warning",
-                    remainingCount > 0
+                    isWechatCleanup
+                        ? remainingCount > 0
+                            ? `已自动丢弃 ${discardedCount} 条无法执行的微信清理建议，剩余 ${remainingCount} 条待确认。`
+                            : `已自动丢弃 ${discardedCount} 条无法执行的微信清理建议。`
+                        : remainingCount > 0
                         ? readmeGenerated
                             ? `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认，README 已写入根目录。`
                             : `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认。`
@@ -2086,6 +2276,7 @@ function getThemeDefinition(themeName) {
 /**
  * 初始化应用
  */
+initializeWechatCleanupConfig(); // 初始化微信清理配置
 initializeTheme(); // 初始化主题
 renderExplorer(); // 渲染资源管理器
 renderEditor(); // 渲染编辑器
