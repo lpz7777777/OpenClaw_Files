@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaro / 澄理 - 智能文件整理应用</title>
+    <style>
+        :root {
+            --bg-1: #edf4ff;
+            --bg-2: #e6edf8;
+            --bg-3: #f7f9fd;
+            --panel: rgba(255, 255, 255, 0.7);
+            --panel-strong: rgba(255, 255, 255, 0.84);
+            --border: rgba(136, 153, 184, 0.22);
+            --text: #1f2430;
+            --text-muted: #617089;
+            --text-subtle: #8b97ad;
+            --blue: #2e7cf6;
+            --blue-strong: #1d63ce;
+            --pink: #ff96b5;
+            --teal: #62b8ab;
+            --shadow-lg: 0 30px 90px rgba(74, 93, 128, 0.18);
+            --shadow-md: 0 18px 42px rgba(84, 101, 132, 0.14);
+            --shadow-sm: 0 12px 24px rgba(84, 101, 132, 0.1);
+            --radius-xl: 34px;
+            --radius-lg: 24px;
+            --radius-md: 18px;
+            --font-ui: "SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI Variable", sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            min-height: 100vh;
+            font-family: var(--font-ui);
+            color: var(--text);
+            background:
+                radial-gradient(circle at 10% 10%, rgba(113, 167, 255, 0.36), transparent 22%),
+                radial-gradient(circle at 90% 12%, rgba(255, 174, 194, 0.28), transparent 20%),
+                radial-gradient(circle at 78% 74%, rgba(116, 214, 197, 0.22), transparent 24%),
+                linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 42%, var(--bg-3) 100%);
+            overflow-x: hidden;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 120px),
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 120px);
+            opacity: 0.28;
+            mask: linear-gradient(180deg, rgba(0,0,0,0.58), transparent 88%);
+            -webkit-mask: linear-gradient(180deg, rgba(0,0,0,0.58), transparent 88%);
+        }
+
+        .shell {
+            width: min(1260px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 24px 0 80px;
+        }
+
+        .nav {
+            position: sticky;
+            top: 14px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 30px;
+            padding: 14px 18px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.52);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            box-shadow: var(--shadow-sm);
+        }
+        .nav-brand, .nav-links { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .lights { display: inline-flex; gap: 7px; }
+        .lights span { width: 10px; height: 10px; border-radius: 999px; }
+        .lights span:nth-child(1) { background: #ff5f57; }
+        .lights span:nth-child(2) { background: #febc2e; }
+        .lights span:nth-child(3) { background: #28c840; }
+        .brand-mark {
+            width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
+            background: linear-gradient(145deg, #67a6ff, #2d7cf5 58%, #1452c5);
+            color: #fff; font-weight: 700; box-shadow: 0 12px 24px rgba(46,124,246,0.26);
+        }
+        .brand-copy small {
+            display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-subtle);
+        }
+        .brand-copy strong { display: block; font-size: 15px; font-weight: 650; }
+        .nav-links a { text-decoration: none; font-size: 13px; color: var(--text-muted); font-weight: 520; }
+        .nav-links a:hover { color: var(--text); }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+            gap: 28px;
+            align-items: center;
+            padding: 34px 0 14px;
+        }
+        .eyebrow {
+            display: inline-flex; align-items: center; gap: 10px;
+            margin-bottom: 18px; padding: 8px 14px; border-radius: 999px;
+            background: rgba(255,255,255,0.54); border: 1px solid rgba(255,255,255,0.65);
+            color: var(--text-muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-sm);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+        }
+        .eyebrow::before {
+            content: ""; width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(180deg, #59d499, #2ea86b);
+            box-shadow: 0 0 0 6px rgba(46,168,107,.12);
+        }
+        .hero h1 {
+            font-size: clamp(48px, 7vw, 84px); line-height: .96; letter-spacing: -.05em; margin-bottom: 18px; font-weight: 760;
+        }
+        .hero h1 span { display: block; color: #5d6a80; font-weight: 580; }
+        .hero p.lead { font-size: 22px; line-height: 1.6; color: #46546b; margin-bottom: 14px; }
+        .hero p.detail { font-size: 16px; line-height: 1.9; color: var(--text-muted); margin-bottom: 26px; }
+        .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 28px; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-height: 50px; padding: 0 22px; border-radius: 999px; text-decoration: none;
+            font-size: 15px; font-weight: 650; transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-primary { background: linear-gradient(180deg, #4995ff, #2e7cf6); color: #fff; box-shadow: 0 18px 36px rgba(46,124,246,.24); }
+        .btn-secondary {
+            background: rgba(255,255,255,.55); color: var(--text); border: 1px solid rgba(255,255,255,.7);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: var(--shadow-sm);
+        }
+
+        .metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+        .metric {
+            padding: 18px 20px; border-radius: var(--radius-md); background: rgba(255,255,255,.5);
+            border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-sm);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+        }
+        .metric strong { display: block; font-size: 28px; letter-spacing: -.04em; margin-bottom: 6px; }
+        .metric span { color: var(--text-muted); font-size: 13px; line-height: 1.65; }
+
+        .hero-visual { position: relative; min-height: 680px; }
+        .hero-visual::before, .hero-visual::after {
+            content: ""; position: absolute; border-radius: 999px; filter: blur(40px); opacity: .72; pointer-events: none;
+        }
+        .hero-visual::before { width: 230px; height: 230px; right: 22px; top: 18px; background: rgba(93,151,255,.34); }
+        .hero-visual::after { width: 220px; height: 220px; left: 18px; bottom: 44px; background: rgba(255,157,189,.24); }
+        .device {
+            position: absolute; inset: 30px 0 auto 24px; padding: 18px; border-radius: 34px;
+            background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.58);
+            backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); box-shadow: var(--shadow-lg);
+        }
+        .device-frame {
+            overflow: hidden; border-radius: 26px; background: rgba(255,255,255,.92);
+            border: 1px solid rgba(138,153,180,.22);
+        }
+        .device-bar {
+            display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;
+            background: rgba(244,247,252,.88); border-bottom: 1px solid rgba(158,170,194,.2);
+        }
+        .device-title { font-size: 13px; font-weight: 650; color: #3b485b; }
+        .device img { display: block; width: min(100%, 640px); height: auto; }
+        .float {
+            position: absolute; width: 230px; padding: 18px; border-radius: 22px;
+            background: rgba(255,255,255,.62); border: 1px solid rgba(255,255,255,.68);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: var(--shadow-md);
+        }
+        .float small { display: block; margin-bottom: 10px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); font-weight: 700; }
+        .float strong { display: block; font-size: 20px; line-height: 1.35; margin-bottom: 8px; }
+        .float p { font-size: 13px; line-height: 1.75; color: var(--text-muted); }
+        .float.top { top: 0; right: -10px; }
+        .float.mid { left: -6px; bottom: 156px; }
+        .float.bottom { right: 18px; bottom: 0; }
+
+        .panel {
+            margin-top: 34px; padding: 40px; border-radius: var(--radius-xl); background: var(--panel);
+            border: 1px solid var(--border); backdrop-filter: blur(28px) saturate(145%);
+            -webkit-backdrop-filter: blur(28px) saturate(145%); box-shadow: var(--shadow-lg);
+        }
+        .section-copy { max-width: 760px; margin-bottom: 28px; }
+        .section-copy small { display: inline-block; margin-bottom: 12px; color: var(--text-subtle); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
+        .section-copy h2 { font-size: clamp(34px, 4vw, 56px); line-height: 1.04; letter-spacing: -.04em; margin-bottom: 12px; }
+        .section-copy p { font-size: 17px; line-height: 1.85; color: var(--text-muted); }
+
+        .cards-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+        .card, .gallery-main, .gallery-side, .theme-card {
+            border-radius: var(--radius-lg); overflow: hidden; background: var(--panel-strong);
+            border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-sm);
+        }
+        .card { padding: 26px; min-height: 226px; }
+        .card .icon {
+            width: 54px; height: 54px; display: grid; place-items: center; margin-bottom: 18px; font-size: 24px;
+            border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(233,239,249,.94));
+        }
+        .card h3 { font-size: 22px; margin-bottom: 12px; letter-spacing: -.03em; }
+        .card p { color: var(--text-muted); line-height: 1.8; font-size: 15px; }
+
+        .gallery { display: grid; grid-template-columns: 1.2fr .8fr; gap: 20px; }
+        .gallery-main img, .theme-card img { display: block; width: 100%; height: auto; }
+        .gallery-caption { padding: 22px 24px; }
+        .gallery-caption strong { display: block; font-size: 22px; margin-bottom: 8px; letter-spacing: -.03em; }
+        .gallery-caption p { font-size: 15px; line-height: 1.8; color: var(--text-muted); }
+        .pill-list { display: grid; gap: 14px; padding: 22px; }
+        .pill {
+            padding: 16px 18px; border-radius: 18px; background: rgba(243,247,253,.88); border: 1px solid rgba(168,180,203,.18);
+        }
+        .pill strong { display: block; margin-bottom: 6px; font-size: 16px; }
+        .pill span { display: block; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+
+        .adv-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+        .adv { padding: 28px; border-radius: var(--radius-lg); background: var(--panel-strong); border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-sm); }
+        .adv h3 { font-size: 24px; margin-bottom: 12px; letter-spacing: -.03em; }
+        .adv p { color: var(--text-muted); line-height: 1.85; font-size: 15px; }
+        .adv ul { list-style: none; display: grid; gap: 12px; margin-top: 18px; }
+        .adv li { position: relative; padding-left: 18px; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+        .adv li::before {
+            content: ""; position: absolute; left: 0; top: .62em; width: 7px; height: 7px; border-radius: 999px;
+            background: linear-gradient(180deg, var(--blue), var(--teal));
+        }
+
+        .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+        .detail-card {
+            border-radius: var(--radius-lg); overflow: hidden; background: var(--panel-strong);
+            border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-sm);
+        }
+        .detail-card img { display: block; width: 100%; height: auto; }
+        .detail-copy { padding: 20px 22px 22px; }
+        .detail-copy strong { display: block; font-size: 20px; margin-bottom: 8px; letter-spacing: -.03em; }
+        .detail-copy p { font-size: 14px; line-height: 1.8; color: var(--text-muted); }
+
+        .themes { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 16px; }
+        .theme-card { transition: transform .2s ease, box-shadow .2s ease; }
+        .theme-card:hover { transform: translateY(-4px) scale(1.01); box-shadow: var(--shadow-md); }
+        .theme-card figcaption { padding: 16px; }
+        .theme-card strong { display: block; font-size: 15px; margin-bottom: 6px; }
+        .theme-card span { font-size: 13px; color: var(--text-subtle); line-height: 1.6; }
+
+        .cta {
+            text-align: center; margin-top: 34px; padding: 48px 28px; border-radius: 40px;
+            background:
+                radial-gradient(circle at top left, rgba(112,171,255,.3), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(255,174,194,.24), transparent 24%),
+                linear-gradient(180deg, rgba(255,255,255,.72), rgba(244,247,252,.82));
+            border: 1px solid rgba(255,255,255,.68); box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+        }
+        .cta h2 { font-size: clamp(34px, 5vw, 60px); line-height: 1.03; letter-spacing: -.04em; margin-bottom: 16px; }
+        .cta p { max-width: 760px; margin: 0 auto 26px; font-size: 17px; line-height: 1.9; color: var(--text-muted); }
+        .footer { text-align: center; padding: 26px 12px 8px; color: var(--text-subtle); font-size: 13px; }
+        .footer strong { color: var(--text-muted); }
+
+        [data-reveal] { opacity: 0; transform: translateY(26px); transition: opacity .8s ease, transform .8s ease; }
+        [data-reveal].visible { opacity: 1; transform: translateY(0); }
+
+        @media (max-width: 1080px) {
+            .hero, .gallery, .adv-grid, .detail-grid { grid-template-columns: 1fr; }
+            .hero-visual { min-height: auto; }
+            .device, .float { position: relative; inset: auto; }
+            .device { margin-bottom: 16px; }
+            .float { width: 100%; margin-top: 14px; }
+            .themes { grid-template-columns: repeat(3, minmax(0,1fr)); }
+        }
+
+        @media (max-width: 820px) {
+            .shell { width: min(100vw - 20px, 100%); padding-top: 16px; }
+            .nav { flex-direction: column; align-items: stretch; border-radius: 28px; }
+            .nav-links { justify-content: flex-start; }
+            .metrics, .cards-3, .themes { grid-template-columns: 1fr; }
+            .panel, .cta { padding: 28px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <nav class="nav">
+            <div class="nav-brand">
+                <div class="lights" aria-hidden="true"><span></span><span></span><span></span></div>
+                <div class="brand-mark">澄</div>
+                <div class="brand-copy">
+                    <small>OpenClaw Workspace</small>
+                    <strong>OpenClaro / 澄理</strong>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="#story">理念</a>
+                <a href="#showcase">界面</a>
+                <a href="#flows">流程</a>
+                <a href="#advantages">优势</a>
+                <a href="#themes">主题</a>
+                <a href="https://github.com/lpz7777777/OpenClaw_Files" target="_blank" rel="noreferrer">GitHub</a>
+            </div>
+        </nav>
+
+        <section class="hero">
+            <div data-reveal>
+                <div class="eyebrow">Mac 风格智能文件整理体验</div>
+                <h1>让文件整理<span>像用一台设计优雅的 Mac 一样自然。</span></h1>
+                <p class="lead">OpenClaro / 澄理 把 OpenClaw 的智能分析、可确认执行、可回滚操作和桌面级工作区放进同一个界面里。</p>
+                <p class="detail">你可以在一个统一的工作台中浏览目录、预览文档、理解 AI 建议、执行整理方案、回滚最近一轮变更，还可以继续把目录同步到百度网盘，或直接处理微信文件归档与去重。它不只是一个“挪文件”的工具，而是一套围绕真实桌面工作流设计的整理体验。</p>
+                <div class="hero-actions">
+                    <a class="btn btn-primary" href="https://github.com/lpz7777777/OpenClaw_Files" target="_blank" rel="noreferrer">访问 GitHub 仓库</a>
+                    <a class="btn btn-secondary" href="#showcase">浏览应用界面</a>
+                </div>
+                <div class="metrics">
+                    <article class="metric"><strong>3 栏</strong><span>资源树、工作区、AI 面板一屏协同。</span></article>
+                    <article class="metric"><strong>可回滚</strong><span>删除、移动、重命名都围绕最近一轮变更构建恢复能力。</span></article>
+                    <article class="metric"><strong>微信专项</strong><span>支持源目录与目标目录分离，并自动按类型归档去重。</span></article>
+                </div>
+            </div>
+
+            <div class="hero-visual" data-reveal>
+                <div class="device">
+                    <div class="device-frame">
+                        <div class="device-bar">
+                            <div class="lights" aria-hidden="true"><span></span><span></span><span></span></div>
+                            <div class="device-title">OpenClaro Workspace</div>
+                            <div style="width:44px;"></div>
+                        </div>
+                        <img src="./screenshots/main-interface.png" alt="OpenClaro 主界面">
+                    </div>
+                </div>
+                <div class="float top">
+                    <small>AI Planning</small>
+                    <strong>先理解文件，再规划目录。</strong>
+                    <p>分析链路会围绕 file_index 做文件级判断，让建议更贴近真实资料内容，而不是只看文件夹名字。</p>
+                </div>
+                <div class="float mid">
+                    <small>Safe Execute</small>
+                    <strong>逐条确认，也能整批落盘。</strong>
+                    <p>每条建议都有理由，每轮执行都有结果，处理重要目录时会更安心。</p>
+                </div>
+                <div class="float bottom">
+                    <small>Cloud + WeChat</small>
+                    <strong>整理之后，还能继续同步与专项清理。</strong>
+                    <p>百度网盘同步、微信文件归档和去重都被放进同一套桌面工作流里。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="story" data-reveal>
+            <div class="section-copy">
+                <small>Design Story</small>
+                <h2>为真实文件整理场景而设计，而不是只做一层 AI 外壳。</h2>
+                <p>OpenClaro / 澄理 的重点不是“把几个功能拼在一起”，而是把目录浏览、文档预览、AI 分析、确认执行、回滚恢复、微信专项清理和百度网盘同步整合成一条真正顺手的桌面工作流。它既希望帮你提高效率，也希望在处理重要资料时给你足够稳定和清晰的反馈。</p>
+            </div>
+            <div class="cards-3">
+                <article class="card"><div class="icon">􀈎</div><h3>一体化工作区</h3><p>目录浏览、文档预览、AI 建议、执行结果和云同步都在同一张桌面里完成，减少切换和上下文丢失。</p></article>
+                <article class="card"><div class="icon">􀣺</div><h3>更稳的执行链路</h3><p>逐条确认、批量执行、失败自动丢弃和最近一轮回滚，让整理不再是“点一下就听天由命”。</p></article>
+                <article class="card"><div class="icon">􀎟</div><h3>更贴近日常场景</h3><p>下载目录、项目文档、微信文件、百度网盘同步都被放在同一套真实使用语境里思考和设计。</p></article>
+            </div>
+        </section>
+
+        <section class="panel" id="showcase" data-reveal>
+            <div class="section-copy">
+                <small>Showcase</small>
+                <h2>布局一眼能懂，操作一用就顺。</h2>
+                <p>主界面延续了 mac 风格常见的玻璃层次和轻盈背景，但重点不止是“像”。更重要的是，左中右三栏的视线流线非常明确：先理解目录，再查看内容，最后确认建议与执行结果。</p>
+            </div>
+            <div class="gallery">
+                <article class="gallery-main">
+                    <img src="./screenshots/main-interface.png" alt="OpenClaro 主界面">
+                    <div class="gallery-caption">
+                        <strong>三栏工作区，把“看”和“做”放在同一张桌面上。</strong>
+                        <p>左侧资源树负责建立上下文，中间工作区承担阅读与预览，右侧分析区负责给出摘要、分类建议与执行结果。打开一个目录之后，整理的思考过程和操作过程会自然衔接起来。</p>
+                    </div>
+                </article>
+                <aside class="gallery-side">
+                    <div class="pill-list">
+                        <div class="pill"><strong>智能分析</strong><span>结合目录结构与文件级索引，让整理建议更像真正读过你的文件。</span></div>
+                        <div class="pill"><strong>确认执行</strong><span>逐条确认与确认全部并存，既适合谨慎整理，也适合快速批量落盘。</span></div>
+                        <div class="pill"><strong>回滚恢复</strong><span>移动、删除、重命名围绕最近一轮操作构建恢复能力。</span></div>
+                        <div class="pill"><strong>微信清理</strong><span>支持把微信文件从源目录整理到目标目录，并自动去重和按类型归档。</span></div>
+                        <div class="pill"><strong>百度网盘</strong><span>整理完成之后可以继续立即上传，或创建每日自动同步。</span></div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <section class="panel" id="flows" data-reveal>
+            <div class="section-copy">
+                <small>Workflow Scenes</small>
+                <h2>从杂乱到清晰，这套流程被真实场景支撑起来。</h2>
+                <p>这个应用的价值不只体现在主界面上，更体现在几个很具体的使用片段里：普通目录整理、微信文件专项归档、百度网盘同步，以及更清楚的配置和阅读体验。这些场景共同说明，它面对的不是抽象的“文件管理”，而是日常工作里真实会遇到的混乱目录。</p>
+            </div>
+            <div class="detail-grid">
+                <article class="detail-card">
+                    <img src="./screenshots/before_clear_normal.png" alt="普通目录整理前">
+                    <div class="detail-copy">
+                        <strong>普通目录整理前</strong>
+                        <p>面对长期堆积的下载目录、项目材料或工作文件时，首先重要的是先看见问题本身，而不是被迫立刻执行某个不透明脚本。</p>
+                    </div>
+                </article>
+                <article class="detail-card">
+                    <img src="./screenshots/after_clear_normal.png" alt="普通目录整理后">
+                    <div class="detail-copy">
+                        <strong>普通目录整理后</strong>
+                        <p>AI 负责生成思路，用户负责确认边界，最终得到的是一个更稳定、可继续使用、也更符合人类阅读习惯的目录结构。</p>
+                    </div>
+                </article>
+                <article class="detail-card">
+                    <img src="./screenshots/before_clear_wechat.png" alt="微信文件整理前">
+                    <div class="detail-copy">
+                        <strong>微信文件专项清理</strong>
+                        <p>微信文件往往来源混杂、命名零散且重复率高。现在可以把它们从源目录整理到目标目录，并自动按类型归档和去重。</p>
+                    </div>
+                </article>
+                <article class="detail-card">
+                    <img src="./screenshots/after_clear_wechat.png" alt="微信文件整理后">
+                    <div class="detail-copy">
+                        <strong>专项归档后的结果</strong>
+                        <p>清理后的目录不再只是“文件被挪走了”，而更像一个真正可以长期维护、继续积累的微信资料归档区。</p>
+                    </div>
+                </article>
+                <article class="detail-card">
+                    <img src="./screenshots/baidu_1.png" alt="百度网盘同步">
+                    <div class="detail-copy">
+                        <strong>整理之后，继续同步到云端</strong>
+                        <p>百度网盘同步模块被纳入同一工作区里，用户在本地整理完成后可以立刻上传，也可以继续创建每日自动同步任务。</p>
+                    </div>
+                </article>
+                <article class="detail-card">
+                    <img src="./screenshots/wechat-settings.png" alt="微信清理设置">
+                    <div class="detail-copy">
+                        <strong>配置本身也具备桌面产品质感</strong>
+                        <p>微信源目录、目标目录和其他设置不再只是冷冰冰的参数，而是被纳入整套视觉语言中，既清楚也更适合展示。</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel" id="advantages" data-reveal>
+            <div class="section-copy">
+                <small>Advantages</small>
+                <h2>为什么它更适合长期使用，而不是只解决一次性的整理任务。</h2>
+                <p>OpenClaro / 澄理 不只是帮你把文件挪一遍，而是试图建立一套可以持续使用的整理方式。无论是普通目录、项目文档、微信文件还是云端同步，最终目标都是让目录更稳定、更容易理解，也更容易继续维护。</p>
+            </div>
+            <div class="adv-grid">
+                <article class="adv">
+                    <h3>它让整理过程更可控</h3>
+                    <p>很多整理工具强调“自动”，但真正重要的是边界清不清楚。这里的分析、确认、执行和结果展示被放在一个连续工作流里，让用户知道系统准备做什么、为什么这么做、以及做完以后目录会变成什么样。</p>
+                    <ul>
+                        <li>每条建议都能单独确认，不必一次性全盘接受。</li>
+                        <li>确认全部和逐条执行并存，适合不同风险等级的目录。</li>
+                        <li>执行结果和当前状态会回写到同一界面里，减少不确定感。</li>
+                    </ul>
+                </article>
+                <article class="adv">
+                    <h3>它把高频场景都串起来了</h3>
+                    <p>应用没有把“普通整理”“微信清理”“云同步”割裂成三套完全不同的体验，而是把它们都放进同一个桌面工作区。这样用户在整理完成之后，可以自然地继续归档、同步和维护。</p>
+                    <ul>
+                        <li>微信文件支持源目录与目标目录分离，并自动去重归档。</li>
+                        <li>百度网盘同步能接在本地整理流程之后继续使用。</li>
+                        <li>回滚链路让“试着整理一下”这件事变得更有安全感。</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel" id="themes" data-reveal>
+            <div class="section-copy">
+                <small>Theme Gallery</small>
+                <h2>不同主题像不同材质的桌面环境，但秩序感始终一致。</h2>
+                <p>这些主题不是简单换色，而是会影响整个工作区的气氛。当前应用默认以 mac 主题启动，而其他主题则提供更偏纸感、工程感或柔和氛围的选择。</p>
+            </div>
+            <div class="themes">
+                <figure class="theme-card"><img src="./screenshots/theme-switcher_wushan.png" alt="雾杉主题"><figcaption><strong>雾杉</strong><span>暖纸质感，像在整理实体文件。</span></figcaption></figure>
+                <figure class="theme-card"><img src="./screenshots/theme-switcher_beian.png" alt="北岸主题"><figcaption><strong>北岸</strong><span>偏工程气质，结构感更强。</span></figcaption></figure>
+                <figure class="theme-card"><img src="./screenshots/theme-switcher_hupo.png" alt="琥珀主题"><figcaption><strong>琥珀</strong><span>更有归档与材料感。</span></figcaption></figure>
+                <figure class="theme-card"><img src="./screenshots/theme-switcher_yuhou.png" alt="雨后主题"><figcaption><strong>雨后</strong><span>低饱和绿调，观感松弛耐看。</span></figcaption></figure>
+                <figure class="theme-card"><img src="./screenshots/theme-switcher_shanhu.png" alt="珊瑚主题"><figcaption><strong>珊瑚</strong><span>更轻柔，也更有呼吸感。</span></figcaption></figure>
+            </div>
+        </section>
+
+        <section class="cta" data-reveal>
+            <h2>把杂乱目录，整理成你愿意继续使用的工作空间。</h2>
+            <p>OpenClaro / 澄理 想做的不只是“帮你收拾一下文件”，而是让整理、归档、同步和回滚都变得可见、可控、可恢复。如果你希望一个桌面应用既有 AI 的效率，也有更稳定、更清楚、更适合长期使用的桌面体验，它会是一种更完整的整理方式。</p>
+            <div class="hero-actions" style="justify-content:center; margin-bottom:0;">
+                <a class="btn btn-primary" href="https://github.com/lpz7777777/OpenClaw_Files" target="_blank" rel="noreferrer">访问 GitHub 仓库</a>
+                <a class="btn btn-secondary" href="#story">继续浏览上方内容</a>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p><strong>OpenClaro / 澄理</strong> · OpenClaw 驱动的智能文件整理工作区</p>
+            <p style="margin-top:8px;">智能分析 · 可确认执行 · 可回滚恢复 · 微信专项清理 · 百度网盘同步</p>
+        </footer>
+    </div>
+
+    <script>
+        const revealItems = document.querySelectorAll("[data-reveal]");
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add("visible");
+                }
+            });
+        }, {
+            threshold: 0.16,
+            rootMargin: "0px 0px -60px 0px"
+        });
+
+        revealItems.forEach((item) => observer.observe(item));
+    </script>
+</body>
+</html>
