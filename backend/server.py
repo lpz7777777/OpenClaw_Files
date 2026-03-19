@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cloud_sync import CloudSyncManager
 from file_analyzer import FileAnalyzer
+from wechat_cleaner import cleanup_wechat_files, open_wechat_folder
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -200,6 +201,29 @@ class RequestHandler(BaseHTTPRequestHandler):
             job_id = data.get("job_id")
             try:
                 result = cloud_sync_manager.remove_schedule(job_id)
+            except Exception as exc:
+                result = {"success": False, "error": str(exc)}
+
+            self._set_headers(200 if result.get("success") else 400)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/wechat/scan":
+            # 扫描微信文件并生成整理计划
+            target_folder = data.get("target_folder")
+            try:
+                result = cleanup_wechat_files(target_folder)
+            except Exception as exc:
+                result = {"success": False, "error": str(exc)}
+
+            self._set_headers(200 if result.get("success") else 400)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if self.path == "/wechat/open":
+            # 打开微信存储目录
+            try:
+                result = open_wechat_folder()
             except Exception as exc:
                 result = {"success": False, "error": str(exc)}
 

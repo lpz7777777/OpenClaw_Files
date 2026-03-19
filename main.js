@@ -204,3 +204,8 @@ ipcMain.handle("select-folder", async () => {
 
     return null;
 });
+
+ipcMain.handle("open-folder", async (event, folderPath) => {
+    const { shell } = require("electron");
+    shell.openPath(folderPath);
+});

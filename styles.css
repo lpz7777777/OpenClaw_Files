@@ -897,6 +897,44 @@ button:disabled {
     grid-column: 1 / -1;
 }
 
+.wechat-info-card {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(47, 122, 107, 0.15);
+}
+
+.wechat-info-card p {
+    margin: 6px 0;
+    font-size: 13px;
+}
+
+.wechat-info-card code {
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--bg-panel);
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+}
+
+.stats-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.stats-list li {
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text);
+    border-bottom: 1px dashed var(--border);
+}
+
+.stats-list li:last-child {
+    border-bottom: none;
+}
+
 .overview-tags,
 .categories-list {
     display: flex;
