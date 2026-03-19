@@ -75,34 +75,43 @@ class FileAnalyzer:
 
     def _build_analysis_prompt(self, folder_path, structure):
         folder_count = len(structure.get("folder_index", []))
+        file_count = len(structure.get("file_index", []))
         required_summary_points = min(max(folder_count, 4), 12)
-        return f"""请分析下面这个文件夹，并给出更细致、可执行、覆盖子目录的整理建议。
+        prompt_payload = {
+            "path": structure.get("path"),
+            "stats": structure.get("stats"),
+            "scan_limits": structure.get("scan_limits"),
+            "folder_index": structure.get("folder_index"),
+            "file_type_overview": structure.get("file_type_overview"),
+            "file_index": structure.get("file_index"),
+        }
+
+        return f"""请分析下面这个文件夹，并基于“各个子文件的文件名、文件类型、所在路径”重新规划整个目录结构。
 
 目标文件夹：{folder_path}
 
 你会看到：
-1. 整体目录树
-2. 每个子目录的统计信息
-3. 每个目录下的示例文件列表
+1. 各级目录统计信息
+2. 扁平化的 file_index，里面列出了扫描到的各个子文件
+3. 每个文件的相对路径、文件名、扩展名、文件类型和语义分组
+4. 文件类型概览
 
 请严格遵守以下要求：
-1. 不只看根目录，必须审阅各级子目录及其文件，尤其是 folder_index 里列出的每个目录。
-2. 如果某个二级或三级目录下的文件应该移动、重命名或重新归档，请直接给出这些文件级别的操作建议。
-3. 如果某个子目录结构已经合理，也要在摘要中明确指出“保持不动”的判断原因。
-4. 优先识别这些问题：
-   - 同类文件散落在不同子目录
-   - 文档、表格、图片、压缩包、临时文件混放
-   - 命名规则不统一
-   - 子目录下存在更适合合并/拆分的文件集
-5. operations 里的 source 和 target 必须是相对于目标文件夹的路径，并统一使用 / 作为路径分隔符，不要使用 Windows 反斜杠。
-6. 只返回你有把握的建议，不要虚构不存在的路径。
-7. summary_points 必须是一条一条的结构化摘要，每一条都尽量点名具体目录路径。
-8. 如果可分析目录不少于 {required_summary_points} 个，请尽量输出至少 {required_summary_points} 条 summary_points。
-9. 输出必须是严格合法的 JSON：只能使用双引号，不能带注释，不能带多余说明文字，不能省略逗号。
-10. reason、summary、summary_points 中如果要出现引号，请进行 JSON 转义。
+1. 不要只看文件夹名字，必须逐个审阅 file_index 里的子文件条目，并依据文件名、扩展名、文件类型、语义分组来判断它们应该归入哪类目录。
+2. 你的目标不是局部微调，而是重新规划整个目录的目标结构。先思考“什么样的目录结构更清晰”，再输出对应的 create_folder、rename_folder、move、rename、delete 操作。
+3. 优先把“同类文件归并”“流程文档/模板/名单/图片/压缩包分区”“编号与命名统一”“根目录减负”作为重规划重点。
+4. 如果某个子目录结构已经合理，也要在摘要中明确指出“保持不动”的判断原因。
+5. 如果某类文件应该统一进入一个新目录，请直接使用 create_folder + move 的组合来表达。
+6. operations 里的 source 和 target 必须是相对于目标文件夹的路径，并统一使用 / 作为路径分隔符，不要使用 Windows 反斜杠。
+7. 只返回你有把握的建议，不要虚构不存在的路径。
+8. 当前扫描到的文件数不少于 {file_count} 个，请优先基于 file_index 做文件级分析，而不是只根据目录层级猜测。
+9. summary_points 必须是一条一条的结构化摘要，每一条都尽量点名具体目录路径，并说明该路径中的文件为什么应该这样重组。
+10. 如果可分析目录不少于 {required_summary_points} 个，请尽量输出至少 {required_summary_points} 条 summary_points。
+11. 输出必须是严格合法的 JSON：只能使用双引号，不能带注释，不能带多余说明文字，不能省略逗号。
+12. reason、summary、summary_points 中如果要出现引号，请进行 JSON 转义。
 
-文件夹结构与统计：
-{json.dumps(structure, ensure_ascii=False, indent=2)}
+用于分析的数据：
+{json.dumps(prompt_payload, ensure_ascii=False, indent=2)}
 
 请只返回 JSON，格式如下：
 {{
@@ -133,16 +142,17 @@ class FileAnalyzer:
 
 Additional requirements:
 1. The "type" field may be only one of "move", "rename", "rename_folder", "create_folder", or "delete".
-2. Output as many concrete operations as you can justify from the provided structure. Do not stop at a short high-level list if there are more clear file or folder changes.
-3. Keep the overview and the operations aligned. If a summary point says a path should be adjusted, add matching operations for that path whenever the action is concrete and safe.
-4. Every actionable summary point should map to one or more operations, and every operation should be reflected in the summary or summary_points.
-5. Use "rename_folder" when renaming a directory, instead of renaming files inside that directory one by one.
-6. Use "delete" for obsolete duplicates, empty staging artifacts, temporary exports, or clearly disposable files/folders. For delete operations, include "source" and "reason"; "target" can be an empty string.
-7. If there are multiple similar files that need cleanup, enumerate them as separate operations instead of collapsing them into one vague suggestion.
-8. When the folder structure is obviously messy, try to output at least {required_operation_count} confident operations before stopping. If there are fewer safe operations, output only the safe ones.
-9. Do not overuse delete. If a file should be kept but just relocated or renamed, prefer "move" or "rename" over "delete".
-10. If you suggest deleting extracted archives or temporary files, also include non-delete operations for naming, consolidation, or folder cleanup when the structure clearly supports them.
-11. You may use "create_folder" when several loose files should be consolidated into a clearer subdirectory.
+2. Start from the files, not from the folders. Review file_index item by item, infer what each file is from its filename and type, then design the target folder structure around those file groups.
+3. Output as many concrete operations as you can justify from the provided structure. Do not stop at a short high-level list if there are more clear file or folder changes.
+4. Keep the overview and the operations aligned. If a summary point says a path should be adjusted, add matching operations for that path whenever the action is concrete and safe.
+5. Every actionable summary point should map to one or more operations, and every operation should be reflected in the summary or summary_points.
+6. Use "rename_folder" when renaming a directory, instead of renaming files inside that directory one by one.
+7. Use "delete" for obsolete duplicates, empty staging artifacts, temporary exports, or clearly disposable files/folders. For delete operations, include "source" and "reason"; "target" can be an empty string.
+8. If there are multiple similar files that need cleanup, enumerate them as separate operations instead of collapsing them into one vague suggestion.
+9. When the folder structure is obviously messy, try to output at least {required_operation_count} confident operations before stopping. If there are fewer safe operations, output only the safe ones.
+10. Do not overuse delete. If a file should be kept but just relocated or renamed, prefer "move" or "rename" over "delete".
+11. If you suggest deleting extracted archives or temporary files, also include non-delete operations for naming, consolidation, or folder cleanup when the structure clearly supports them.
+12. You may use "create_folder" when several loose files should be consolidated into a clearer subdirectory.
 
 Correct JSON examples:
 {{"type": "rename_folder", "source": "OldReports", "target": "Reports", "reason": "Use a clearer top-level folder name"}}
@@ -471,6 +481,34 @@ Correct JSON examples:
                 return candidate
             candidate_index += 1
 
+    def _merge_directory_into_existing_target(self, source_path, target_path):
+        if not os.path.isdir(source_path):
+            raise ValueError("Source path is not a directory")
+        if not os.path.isdir(target_path):
+            raise ValueError("Target path is not a directory")
+
+        child_names = sorted(os.listdir(source_path), key=lambda item: item.lower())
+        conflicting_names = [
+            child_name
+            for child_name in child_names
+            if os.path.exists(os.path.join(target_path, child_name))
+        ]
+        if conflicting_names:
+            raise ValueError(
+                "Target folder already exists and contains conflicting items: "
+                + ", ".join(conflicting_names[:5])
+            )
+
+        moved_entries = []
+        for child_name in child_names:
+            source_child = os.path.join(source_path, child_name)
+            target_child = os.path.join(target_path, child_name)
+            os.rename(source_child, target_child)
+            moved_entries.append(child_name)
+
+        os.rmdir(source_path)
+        return moved_entries
+
     def _join_relative_path(self, *parts) -> str:
         cleaned_parts = []
         for part in parts:
@@ -517,6 +555,50 @@ Correct JSON examples:
         normalized = normalized.replace("（", "(").replace("）", ")")
         normalized = re.sub(r"[\s\-_()]+", "", normalized)
         return normalized
+
+    def _classify_file_entry(self, relative_path: str, extension: str, file_name: str) -> dict:
+        normalized_name = str(file_name or "").lower()
+        extension = str(extension or "").lower()
+
+        type_group = "other"
+        if extension in {".doc", ".docx", ".pdf", ".txt", ".md"}:
+            type_group = "document"
+        elif extension in {".xls", ".xlsx", ".csv"}:
+            type_group = "spreadsheet"
+        elif extension in {".ppt", ".pptx"}:
+            type_group = "presentation"
+        elif extension in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}:
+            type_group = "image"
+        elif extension in {".zip", ".rar", ".7z", ".tar", ".gz"}:
+            type_group = "archive"
+        elif extension in {".mp3", ".wav", ".mp4", ".mov", ".avi"}:
+            type_group = "media"
+
+        semantic_group = "general"
+        if normalized_name.startswith("~$"):
+            semantic_group = "temporary"
+        elif any(keyword in normalized_name for keyword in ("模板", "范例", "样例", "填写说明")):
+            semantic_group = "template"
+        elif any(keyword in normalized_name for keyword in ("流程", "清单", "规范", "手册", "说明")):
+            semantic_group = "reference"
+        elif any(keyword in normalized_name for keyword in ("名单", "汇总表", "统计表")):
+            semantic_group = "index"
+        elif any(keyword in normalized_name for keyword in ("公示",)):
+            semantic_group = "publicity"
+        elif any(keyword in normalized_name for keyword in ("预汇报", "汇报")):
+            semantic_group = "report"
+        elif any(keyword in normalized_name for keyword in ("发展会", "票决", "决议", "介绍人意见")):
+            semantic_group = "meeting"
+        elif type_group == "archive":
+            semantic_group = "archive"
+        elif type_group == "image":
+            semantic_group = "media"
+
+        return {
+            "type_group": type_group,
+            "semantic_group": semantic_group,
+            "parent_path": self._normalize_relative_path(os.path.dirname(relative_path)),
+        }
 
     def _looks_like_redundant_wrapper(self, parent_name: str, child_name: str) -> bool:
         parent_normalized = self._normalize_name_for_matching(parent_name)
@@ -953,6 +1035,8 @@ Correct JSON examples:
 
         tree = build_tree(folder_path, 0)
 
+        file_index = self._build_file_index(tree)
+
         return {
             "path": folder_path,
             "scan_limits": {
@@ -965,6 +1049,8 @@ Correct JSON examples:
             },
             "stats": stats,
             "folder_index": self._build_folder_index(tree),
+            "file_index": file_index,
+            "file_type_overview": self._build_file_type_overview(file_index),
             "tree": tree,
         }
 
@@ -1002,6 +1088,52 @@ Correct JSON examples:
 
         visit(root_node)
         return folder_index
+
+    def _build_file_index(self, root_node):
+        file_index = []
+
+        for node in self._iter_directory_nodes(root_node):
+            for file_info in node.get("files", []):
+                relative_path = self._normalize_relative_path(
+                    file_info.get("relative_path", "")
+                )
+                if not relative_path:
+                    continue
+
+                file_name = file_info.get("name") or os.path.basename(relative_path)
+                extension = str(file_info.get("extension", "")).lower()
+                classification = self._classify_file_entry(
+                    relative_path, extension, file_name
+                )
+
+                file_index.append(
+                    {
+                        "relative_path": relative_path,
+                        "name": file_name,
+                        "extension": extension or "[no_ext]",
+                        "type_group": classification["type_group"],
+                        "semantic_group": classification["semantic_group"],
+                        "parent_path": classification["parent_path"] or ".",
+                    }
+                )
+
+        return file_index
+
+    def _build_file_type_overview(self, file_index):
+        extension_counter = Counter()
+        type_group_counter = Counter()
+        semantic_group_counter = Counter()
+
+        for file_info in file_index:
+            extension_counter[file_info.get("extension") or "[no_ext]"] += 1
+            type_group_counter[file_info.get("type_group") or "other"] += 1
+            semantic_group_counter[file_info.get("semantic_group") or "general"] += 1
+
+        return {
+            "top_extensions": extension_counter.most_common(12),
+            "type_groups": type_group_counter.most_common(),
+            "semantic_groups": semantic_group_counter.most_common(),
+        }
 
     def _sort_operations_for_execution(self, operations):
         def sort_key(operation):
@@ -1077,6 +1209,7 @@ Correct JSON examples:
                     continue
 
                 created_now = False
+                merged_entries = []
 
                 if op_type == "create_folder":
                     if os.path.exists(target):
@@ -1118,8 +1251,33 @@ Correct JSON examples:
                             }
                         )
                         continue
-                    self._ensure_parent_directory(target)
-                    os.rename(source, target)
+                    if os.path.exists(target):
+                        if not os.path.isdir(target):
+                            results.append(
+                                {
+                                    "success": False,
+                                    "operation": operation,
+                                    "error": "Target path already exists and is not a directory",
+                                }
+                            )
+                            continue
+
+                        try:
+                            merged_entries = self._merge_directory_into_existing_target(
+                                source, target
+                            )
+                        except ValueError as exc:
+                            results.append(
+                                {
+                                    "success": False,
+                                    "operation": operation,
+                                    "error": str(exc),
+                                }
+                            )
+                            continue
+                    else:
+                        self._ensure_parent_directory(target)
+                        os.rename(source, target)
                 elif op_type == "delete":
                     if delete_backup_root is None:
                         backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
@@ -1144,6 +1302,7 @@ Correct JSON examples:
                         "target": target,
                         "temp_root": delete_backup_root if op_type == "delete" else "",
                         "created_now": created_now if op_type == "create_folder" else False,
+                        "merged_entries": merged_entries if op_type == "rename_folder" else [],
                     }
                 )
 
@@ -1193,6 +1352,16 @@ Correct JSON examples:
                             os.rmdir(target)
                         except OSError:
                             pass
+                    continue
+
+                if op_type == "rename_folder" and item.get("merged_entries"):
+                    self._ensure_parent_directory(source)
+                    os.makedirs(source, exist_ok=True)
+                    for child_name in reversed(item.get("merged_entries", [])):
+                        target_child = os.path.join(target, child_name)
+                        source_child = os.path.join(source, child_name)
+                        if os.path.exists(target_child):
+                            os.rename(target_child, source_child)
                     continue
 
                 if op_type == "delete":

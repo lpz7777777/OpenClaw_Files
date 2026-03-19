@@ -593,7 +593,194 @@ npm start
 
 ---
 
-## 十、当前版本信息
+## 十、后续开发：分析输出与执行链路完善
+
+### 1. 提示词与输出结构优化
+
+**问题背景：**
+早期版本中，OpenClaw 的分析输出存在"概述说了要整理，建议列表却没落地"的脱节现象，且操作建议数量偏少、类型单一。
+
+**改进措施：**
+
+1. **提示词重构**：
+   - 明确要求模型输出更多、更具体的操作建议
+   - 要求 `summary_points` 和 `operations` 互相对应
+   - 分析主轴改为"逐个审阅 file_index 中的文件，依据文件名和文件类型判断归类，再重新规划整个目录结构"
+
+2. **后端归一化增强**：
+   - 把缺失的操作摘要补到概述里
+   - 构建扁平的 `file_index`，包含每个子文件的：相对路径、文件名、扩展名、type_group、semantic_group、所在父目录
+   - 生成 `file_type_overview` 辅助分析
+
+实现位置：[backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L79-L123)
+
+### 2. 新增操作类型：delete 与 rename_folder
+
+**delete 操作：**
+- 不是直接硬删，而是先移动到临时备份区
+- 回滚时能从备份区恢复
+- 前端删除操作不再显示空目标路径
+
+**rename_folder 操作：**
+- 显式校验目录类型
+- 不再把目录改名混在普通文件 rename 里
+- 支持目录合并：目标目录已存在时，进入"安全合并模式"
+
+**安全合并模式：**
+- 检查源目录和目标目录下是否有重名子项
+- 若无冲突，将源目录内容并入目标目录，再删除源目录
+- 支持回滚
+
+实现位置：[backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L73)
+
+### 3. 跨盘删除报错修复 (WinError 17)
+
+**问题：**
+```
+执行失败：[WinError 17] 系统无法将文件移到不同的磁盘驱动器。
+'D:\...\Test\06 入党公示.rar' -> 'C:\Users\...\Temp\openclaw-delete-...\06 入党公示.rar'
+```
+
+**修复：**
+- delete 备份不再放到 C: 的系统临时目录
+- 改为放到和目标文件夹同盘的临时备份目录
+- 格式：`{目标盘符}\.openclaw-delete-{随机后缀}\`
+
+实现位置：[backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L73)
+
+### 4. 目录冲突修复 (WinError 183)
+
+**问题 1：子文件与父目录备份冲突**
+```
+执行失败：[WinError 183] 当文件已存在时，无法创建该文件。
+'...\入党积极分子考察表（大白本）' -> '...\openclaw-delete-...\入党积极分子考察表（大白本）'
+```
+
+**修复：**
+- 删除备份目标自动避让重名，生成唯一备份路径
+- 同一批操作里先执行 rename_folder 后，后续旧路径自动重写
+- 批量执行顺序做安全排序
+- 前端执行完 rename_folder 后同步更新剩余待执行项的路径
+
+**问题 2：目录重命名目标已存在**
+```
+执行失败：[WinError 183] 当文件已存在时，无法创建该文件。
+'...\党员发展 - 参考模板' -> '...\00-参考模板'
+```
+
+**修复：**
+- rename_folder 支持两种模式：
+  1. 目标目录不存在：直接重命名
+  2. 目标目录已存在：安全合并模式（检查子项冲突后合并）
+
+实现位置：[backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L73)
+
+### 5. 启发式建议补充
+
+不再完全依赖模型自由发挥，后端稳定额外识别高置信模式：
+
+| 模式 | 建议类型 | 说明 |
+|------|----------|------|
+| 已有同名解压目录的压缩包 | delete | 删除已解压的压缩包 |
+| ~$...docx/xlsx/pptx | delete | Office 临时文件 |
+| 文件名 (1).docx | rename | 重复下载后缀重命名 |
+| 父目录 + 同名包装子目录 | move + delete | 上移文件，删除空包装目录 |
+
+### 6. 规整化操作建议
+
+新增"创建/重命名文件夹"来让目录更规范：
+
+**create_folder：**
+- 把根目录散落的文档归入 `00-流程文档`、`00-参考资料`
+
+**rename_folder：**
+- 把 `党员发展 - 参考模板` 下的 `1 确定为发展对象准备的材料`、`2 外调函` 改成 `01-...`、`02-...` 格式
+
+**实测效果（Test 目录）：**
+- 操作总数：24 条
+- 类型分布：rename_folder 13 / move 5 / create_folder 2 / delete 2 / rename 2
+
+### 7. 文件级驱动分析
+
+**改造前：** 主要围绕子目录层级做判断
+
+**改造后：** 先构建扁平 file_index，逐个审阅文件：
+
+```python
+file_index = [
+    {
+        "path": "党员发展 - 参考模板/1 确定为发展对象准备的材料/...",
+        "filename": "入党积极分子考察表（大白本）.docx",
+        "extension": ".docx",
+        "type_group": "document",
+        "semantic_group": "党员发展",
+        "parent_dir": "03 入党积极分子考察表（大白本）"
+    },
+    ...
+]
+```
+
+提示词主轴改为："依据文件名和文件类型判断归类，再重新规划整个目录结构"
+
+实现位置：[backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py#L79-L123)
+
+### 8. 前端联动更新
+
+**renderer.js：**
+- 补全 delete 和 rename_folder 的标签、文案和路径展示
+- 执行完 rename_folder 后同步更新剩余待执行项的路径
+
+**styles.css：**
+- 新增操作类型标签样式
+
+实现位置：[renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js#L715)、[styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css#L786)
+
+### 9. 验证结果
+
+**静态检查：**
+```bash
+python -m py_compile backend/file_analyzer.py backend/server.py
+node --check renderer.js
+```
+
+**实测场景：**
+- ✅ 删除子文件后再删除父文件夹的冲突
+- ✅ 父目录重命名 + 子路径 move/delete 混合批量执行
+- ✅ 跨盘删除备份（同盘备份目录）
+- ✅ 目录合并（目标目录已存在）
+- ✅ 所有操作的回滚
+
+**Test 目录实测结果：**
+- summary_points: 18 条
+- operations: 39 条
+- 类型分布：delete 26 / move 10 / rename_folder 2 / create_folder 1
+
+---
+
+## 十一、当前功能清单
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| OpenClaw Gateway 接入 | ✅ | WebSocket + 设备身份 + 配对 |
+| 三栏工作区布局 | ✅ | 左侧资源树、中间预览、右侧分析 |
+| 浅色扁平主题 | ✅ | 实色卡片、弱阴影、强边框 |
+| 文件类型图标 | ✅ | 不同类型不同颜色 |
+| 逐条确认执行 | ✅ | 每条建议可单独确认 |
+| 子目录递归分析 | ✅ | 扫描各级子文件夹 |
+| Word/Excel 预览 | ✅ | docx/xlsx/xls/csv |
+| 分析摘要结构化 | ✅ | 一条一条显示 |
+| JSON 容错修复 | ✅ | 本地清洗 + 自动修复 |
+| 流式响应拼接 | ✅ | 分片累计拼接 |
+| 回滚 | ✅ | 支持最近一轮操作 |
+| delete 操作备份 | ✅ | 同盘临时备份区 |
+| rename_folder 操作 | ✅ | 目录重命名与合并 |
+| 启发式建议补充 | ✅ | 高置信模式识别 |
+| 规整化建议 | ✅ | create_folder / rename_folder |
+| 文件级驱动分析 | ✅ | file_index 驱动 |
+
+---
+
+## 十二、当前版本信息
 
 - 版本：1.0.0
 - 最后更新：2026-03-19
