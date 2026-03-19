@@ -958,6 +958,31 @@ Mac 风格主题特点：
 - `node --check renderer.js`
 - `node --check main.js`
 
+## 2026-03-19 补充：云状态刷新时机与百度网盘区域首屏展示
+
+用户针对百度网盘同步区补充了两条交互要求：
+
+- 打开某个文件夹时，不要重新读取 Gateway 状态、定时任务和百度网盘登录信息
+- 百度网盘区域内不再重复显示 OpenClaw Gateway 状态；在完成一次有效状态刷新之前，也不要先显示 `bdpan 未安装`、`定时调度未启用` 这类结论性文案
+
+本轮调整：
+
+- 应用启动时仍会主动执行一次全局云状态刷新，用于更新顶部栏的 Gateway 胶囊与任务概览
+- `openFolder()` 中移除了 `loadCloudSyncStatus()`，打开文件夹只更新本地默认路径和分析流程，不再触发云状态重刷
+- 初始化当前文件夹的网盘默认路径时，不再顺手清空已有的 `cloudSyncStatus`，避免顶部栏和同步区被“打开文件夹”动作冲掉
+- 百度网盘区域移除了第一行的 Gateway 状态说明，Gateway 连接状态只保留在顶部栏
+- 当云状态尚未拿到首个有效结果时，百度网盘区域只显示中性提示，不提前渲染 `bdpan 未安装` / `定时调度未启用`
+- 如果状态刷新失败，顶部栏会显示 `Gateway 状态异常`，但百度网盘区域仍保持中性说明，避免误把“未完成刷新”当成确定结论
+
+涉及文件：
+
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+
+本轮验证：
+
+- `node --check renderer.js`
+- `python -m py_compile backend/cloud_sync.py backend/server.py`
+
 ---
 
 ## 十四、2026-03-19 补充：百度网盘模块与顶部状态

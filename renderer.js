@@ -238,7 +238,6 @@ async function openFolder(folderPath) {
 
     await loadFolderTree(folderPath, false);
     openOverviewTab();
-    await loadCloudSyncStatus();
     await analyzeFolder(folderPath);
 }
 
@@ -249,7 +248,6 @@ function initializeBdpanDefaults(folderPath) {
     state.bdpanDailyTime = DEFAULT_BDPAN_DAILY_TIME;
     state.bdpanTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
     state.bdpanTimezoneEdited = false;
-    state.cloudSyncStatus = null;
 
     bdpanRemotePathInput.value = state.bdpanRemotePath;
     bdpanDailyTimeInput.value = state.bdpanDailyTime;
@@ -1028,6 +1026,10 @@ function renderTopbarCloudSummary(status, jobs) {
         gatewayStatusPill.className = "sync-status-pill neutral";
         gatewayStatusPill.textContent = "Gateway 检查中";
         gatewayStatusText.textContent = "正在连接 OpenClaw Gateway 并加载定时任务...";
+    } else if (!status && state.cloudSyncFeedback?.type === "error") {
+        gatewayStatusPill.className = "sync-status-pill error";
+        gatewayStatusPill.textContent = "Gateway 状态异常";
+        gatewayStatusText.textContent = state.cloudSyncFeedback.message;
     } else if (status) {
         gatewayStatusPill.className = `sync-status-pill ${gatewayOk ? "ok" : "error"}`;
         gatewayStatusPill.textContent = gatewayOk ? "Gateway 已连接" : "Gateway 不可用";
@@ -1066,9 +1068,9 @@ function renderCloudSyncPanel() {
     const hasFolder = Boolean(state.currentFolderPath);
     const status = state.cloudSyncStatus;
     const jobs = Array.isArray(status?.jobs) ? status.jobs : [];
-    const gatewayOk = Boolean(status?.gateway?.ok);
     const bdpanStatus = status?.bdpan || {};
     const cronStatus = status?.cron || {};
+    const hasConfirmedStatus = Boolean(status);
 
     bdpanRemotePathInput.value = state.bdpanRemotePath;
     bdpanDailyTimeInput.value = state.bdpanDailyTime || DEFAULT_BDPAN_DAILY_TIME;
@@ -1080,48 +1082,52 @@ function renderCloudSyncPanel() {
         bdpanMeta.textContent = "检查中";
     } else if (state.isCloudSyncBusy) {
         bdpanMeta.textContent = "执行中";
+    } else if (!hasConfirmedStatus) {
+        bdpanMeta.textContent = "未检查";
     } else {
         bdpanMeta.textContent = `${jobs.length} 个任务`;
     }
 
     const statusLines = [];
-    statusLines.push(
-        `<div class="sync-status-line">
-            <strong>OpenClaw Gateway</strong>
-            <span>${escapeHtml(
-                gatewayOk ? "已连接。" : "当前不可用。"
-            )} ${escapeHtml(status?.gateway?.detail || "尚未检查 OpenClaw Gateway。")}</span>
-        </div>`
-    );
 
-    if (bdpanStatus.installed) {
-        const authText = bdpanStatus.authenticated
-            ? `百度网盘已登录：${bdpanStatus.username || "当前账户"}`
-            : "百度网盘未登录或登录已失效";
-        const authDetail = bdpanStatus.authenticated
-            ? bdpanStatus.token_expires_in || bdpanStatus.expires_at || ""
-            : bdpanStatus.detail || "";
+    if (!hasConfirmedStatus) {
+        statusLines.push(
+            `<div class="sync-status-line sync-status-note"><span>${
+                state.isCloudSyncLoading
+                    ? "正在刷新百度网盘登录状态和定时任务信息..."
+                    : "等待完成一次状态刷新后，这里会显示百度网盘登录状态和定时任务摘要。"
+            }</span></div>`
+        );
+    } else {
+        if (bdpanStatus.installed) {
+            const authText = bdpanStatus.authenticated
+                ? `百度网盘已登录：${bdpanStatus.username || "当前账户"}`
+                : "百度网盘未登录或登录已失效";
+            const authDetail = bdpanStatus.authenticated
+                ? bdpanStatus.token_expires_in || bdpanStatus.expires_at || ""
+                : bdpanStatus.detail || "";
+
+            statusLines.push(
+                `<div class="sync-status-line"><span class="sync-status-pill ${
+                    bdpanStatus.authenticated ? "ok" : "warning"
+                }">${escapeHtml(authText)}</span><span>${escapeHtml(authDetail)}</span></div>`
+            );
+        } else {
+            statusLines.push(
+                `<div class="sync-status-line"><span class="sync-status-pill error">bdpan 未安装</span><span>${escapeHtml(
+                    bdpanStatus.detail || "未找到 bdpan CLI。"
+                )}</span></div>`
+            );
+        }
 
         statusLines.push(
             `<div class="sync-status-line"><span class="sync-status-pill ${
-                bdpanStatus.authenticated ? "ok" : "warning"
-            }">${escapeHtml(authText)}</span><span>${escapeHtml(authDetail)}</span></div>`
-        );
-    } else {
-        statusLines.push(
-            `<div class="sync-status-line"><span class="sync-status-pill error">bdpan 未安装</span><span>${escapeHtml(
-                bdpanStatus.detail || "未找到 bdpan CLI。"
+                cronStatus.enabled ? "ok" : "warning"
+            }">${cronStatus.enabled ? "定时调度已启用" : "定时调度未启用"}</span><span>${escapeHtml(
+                cronStatus.detail || "尚未检查 OpenClaw cron。"
             )}</span></div>`
         );
     }
-
-    statusLines.push(
-        `<div class="sync-status-line"><span class="sync-status-pill ${
-            cronStatus.enabled ? "ok" : "warning"
-        }">${cronStatus.enabled ? "定时调度已启用" : "定时调度未启用"}</span><span>${escapeHtml(
-            cronStatus.detail || "尚未检查 OpenClaw cron。"
-        )}</span></div>`
-    );
 
     if (!hasFolder) {
         statusLines.push(
