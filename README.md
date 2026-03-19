@@ -1,8 +1,8 @@
-# OpenClaw Files
+# OpenClaro / 澄理
 
 <div align="center">
 
-**基于 Electron + Python 的智能文件整理桌面工具**
+**基于 OpenClaw 的智能文件夹整理应用**
 
 通过 OpenClaw AI 分析目录结构，生成可确认、可执行、可回滚的文件整理方案，并扩展支持百度网盘同步与微信文件专项清理。
 
@@ -36,7 +36,7 @@
 
 ## 🎯 项目简介
 
-OpenClaw Files 是一个围绕"本地文件整理"设计的桌面工作区：
+OpenClaro / 澄理 是一个围绕"本地文件整理"设计的桌面工作区：
 
 - 📁 **左侧资源管理器** - 递归浏览当前目录结构
 - 📄 **中间文档工作区** - 支持多标签预览 Word、Excel、文本等内容
@@ -52,7 +52,7 @@ OpenClaw Files 是一个围绕"本地文件整理"设计的桌面工作区：
 ### 🖥️ 主界面
 
 <div align="center">
-  <img src="./screenshots/main-interface.png" alt="OpenClaw Files 主界面" width="100%">
+  <img src="./screenshots/main-interface.png" alt="OpenClaro 主界面" width="100%">
 </div>
 
 <div align="center">
@@ -571,7 +571,7 @@ git push origin main
 
 <div align="center">
 
-**Made with ❤️ by OpenClaw Files Team**
+**Made with ❤️ by OpenClaro Team**
 
 [⬆️ 返回顶部](#openclaw-files)
 

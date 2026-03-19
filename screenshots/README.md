@@ -1,6 +1,6 @@
-# 📸 OpenClaw Files 程序截图
+# 📸 OpenClaro / 澄理 程序截图
 
-本目录存放 OpenClaw Files 应用程序的截图，用于 GitHub README 展示。
+本目录存放 OpenClaro 应用程序的截图，用于 GitHub README 展示。
 
 ## ✅ 现有截图列表（全部已使用）
 
@@ -71,5 +71,7 @@
 <div align="center">
 
 **所有截图已在 README 中展示，项目展示完整！** 📸✨
+
+OpenClaro / 澄理 · 让文件整理更简单
 
 </div>
