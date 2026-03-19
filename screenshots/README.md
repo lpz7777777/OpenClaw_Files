@@ -2,33 +2,39 @@
 
 本目录存放 OpenClaw Files 应用程序的截图，用于 GitHub README 展示。
 
-## ✅ 现有截图列表
+## ✅ 现有截图列表（全部已使用）
 
-### 主界面
-- `main-interface.png` - 主界面三栏布局展示
+### 🖥️ 主界面
+- `main-interface.png` - 主界面三栏布局展示 ✅ **已在 README 中使用**
 
-### 主题展示
-- `theme-switcher_wushan.png` - 雾杉主题
-- `theme-switcher_beian.png` - 北岸主题
-- `theme-switcher_hupo.png` - 琥珀主题
-- `theme-switcher_yuhou.png` - 雨后主题
-- `theme-switcher_shanhu.png` - 珊瑚主题
+### 🎨 主题展示
+- `theme-switcher_wushan.png` - 雾杉主题 ✅ **已在 README 中使用**
+- `theme-switcher_beian.png` - 北岸主题 ✅ **已在 README 中使用**
+- `theme-switcher_hupo.png` - 琥珀主题 ✅ **已在 README 中使用**
+- `theme-switcher_yuhou.png` - 雨后主题 ✅ **已在 README 中使用**
+- `theme-switcher_shanhu.png` - 珊瑚主题 ✅ **已在 README 中使用**
 
-### 功能截图
-- `suggestions.png` - 整理建议面板
-- `baidu_1.png` - 百度网盘同步功能（1）
-- `baidu_2.png` - 百度网盘同步功能（2）
-- `wechat-settings.png` - 微信文件清理配置
+### 📋 功能截图
+- `suggestions.png` - 整理建议面板 ✅ **已在 README 中使用**
+- `baidu_1.png` - 百度网盘同步功能（1） ✅ **已在 README 中使用**
+- `baidu_2.png` - 百度网盘同步功能（2） ✅ **已在 README 中使用**
+- `wechat-settings.png` - 微信文件清理配置 ✅ **已在 README 中使用**
 
-### 整理前后对比
-- `before_clear_normal.png` - 普通文件夹整理前
-- `after_clear_normal.png` - 普通文件夹整理后
-- `before_clear_wechat.png` - 微信文件整理前
-- `after_clear_wechat.png` - 微信文件整理后
+### 📊 整理前后对比
+- `before_clear_normal.png` - 普通文件夹整理前 ✅ **已在 README 中使用**
+- `after_clear_normal.png` - 普通文件夹整理后 ✅ **已在 README 中使用**
+- `before_clear_wechat.png` - 微信文件整理前 ✅ **已在 README 中使用**
+- `after_clear_wechat.png` - 微信文件整理后 ✅ **已在 README 中使用**
 
-### 操作过程
-- `clear_process.png` - 整理过程展示（逐条确认、回滚等）
-- `multi_tabs.png` - 多标签页预览与管理
+### ⚡ 操作过程
+- `clear_process.png` - 整理过程展示（逐条确认、回滚等） ✅ **已在 README 中使用**
+- `multi_tabs.png` - 多标签页预览与管理 ✅ **已在 README 中使用**
+
+## 📊 使用统计
+
+- **总截图数**：16 张
+- **已使用**：16 张（100%）
+- **未使用**：0 张
 
 ## 📷 截图建议
 
@@ -64,6 +70,6 @@
 
 <div align="center">
 
-**截图让项目展示更加生动直观！** 📸
+**所有截图已在 README 中展示，项目展示完整！** 📸✨
 
 </div>

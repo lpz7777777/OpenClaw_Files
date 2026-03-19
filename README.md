@@ -133,32 +133,61 @@ OpenClaw Files 是一个围绕"本地文件整理"设计的桌面工作区：
 
 ---
 
-### 🧹 清理前对比
+### 🧹 普通文件夹整理前后对比
 
 <div align="center">
-  <img src="./screenshots/before_clear_normal.png" alt="清理前状态" width="100%">
+  <img src="./screenshots/before_clear_normal.png" alt="整理前 - 普通文件夹" width="48%">
+  <img src="./screenshots/after_clear_normal.png" alt="整理后 - 普通文件夹" width="48%">
 </div>
 
 <div align="center">
 
-**清理前状态** - 展示整理前的目录结构和文件分布
+**普通文件夹整理** - 左侧为整理前，右侧为整理后，AI 自动识别并归类文件
 
 </div>
 
 ---
 
-### 📷 更多截图预留
+### 💬 微信文件整理前后对比
 
-| 模块 | 截图状态 | 说明 |
-|------|----------|------|
-| 整理建议执行过程 | 🔲 待补充 | 展示逐条确认、确认全部和执行进度 |
-| 执行结果与回滚 | 🔲 待补充 | 展示执行成功/失败状态和回滚操作 |
-| 文件去重效果 | 🔲 待补充 | 展示重复文件识别和自动去重 |
-| 目录结构对比 | 🔲 待补充 | 整理前后的目录树对比 |
-| 文档预览功能 | 🔲 待补充 | Word/Excel 文件预览效果 |
-| 多标签页管理 | 🔲 待补充 | 多标签页同时预览多个文件 |
+<div align="center">
+  <img src="./screenshots/before_clear_wechat.png" alt="整理前 - 微信文件" width="48%">
+  <img src="./screenshots/after_clear_wechat.png" alt="整理后 - 微信文件" width="48%">
+</div>
 
-> 💡 **提示**：建议后续补充以上截图，让 README 更加完整展示应用的各项功能。
+<div align="center">
+
+**微信文件专项清理** - 左侧为整理前，右侧为整理后，按文件类型自动归档并去重
+
+</div>
+
+---
+
+### ⚡ 整理过程与操作
+
+<div align="center">
+  <img src="./screenshots/clear_process.png" alt="整理过程" width="100%">
+</div>
+
+<div align="center">
+
+**整理过程** - 支持逐条确认建议、批量执行、回滚操作等
+
+</div>
+
+---
+
+### 📑 多标签页预览与管理
+
+<div align="center">
+  <img src="./screenshots/multi_tabs.png" alt="多标签页预览" width="100%">
+</div>
+
+<div align="center">
+
+**多标签页管理** - 同时预览多个文件，标签页切换方便高效
+
+</div>
 
 ---
 
