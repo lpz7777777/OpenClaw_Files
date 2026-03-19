@@ -9,6 +9,8 @@ const API_BASE = "http://localhost:8765";
 const PREVIEW_BYTE_LIMIT = 200 * 1024;
 const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
+const THEME_STORAGE_KEY = "openclaw-workspace-theme";
+const THEMES = new Set(["workspace", "mac"]);
 
 const state = {
     currentFolderPath: null,
@@ -30,10 +32,12 @@ const state = {
     completedOperationIndexes: new Set(),
     analysisTone: "idle",
     analysisMessage: "选择文件夹后，这里会显示 OpenClaw 输出的整理建议、操作计划和执行结果。",
+    currentTheme: "workspace",
 };
 
 const selectFolderBtn = document.getElementById("selectFolderBtn");
 const analyzeBtn = document.getElementById("analyzeBtn");
+const themeSelect = document.getElementById("themeSelect");
 const selectedPath = document.getElementById("selectedPath");
 const explorerStats = document.getElementById("explorerStats");
 const explorerTree = document.getElementById("explorerTree");
@@ -51,6 +55,10 @@ const confirmBtn = document.getElementById("confirmBtn");
 const newAnalysisBtn = document.getElementById("newAnalysisBtn");
 const rollbackBtn = document.getElementById("rollbackBtn");
 const cancelBtn = document.getElementById("cancelBtn");
+
+themeSelect.addEventListener("change", (event) => {
+    applyTheme(event.target.value);
+});
 
 selectFolderBtn.addEventListener("click", async () => {
     const folderPath = await ipcRenderer.invoke("select-folder");
@@ -1339,6 +1347,20 @@ function escapeHtml(value) {
         .replace(/'/g, "&#39;");
 }
 
+function initializeTheme() {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    applyTheme(storedTheme && THEMES.has(storedTheme) ? storedTheme : "workspace");
+}
+
+function applyTheme(themeName) {
+    const normalizedTheme = THEMES.has(themeName) ? themeName : "workspace";
+    state.currentTheme = normalizedTheme;
+    document.body.dataset.theme = normalizedTheme;
+    themeSelect.value = normalizedTheme;
+    localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+}
+
+initializeTheme();
 renderExplorer();
 renderEditor();
 renderAnalysis();

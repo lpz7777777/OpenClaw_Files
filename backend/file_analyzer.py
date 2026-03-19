@@ -771,6 +771,56 @@ Correct JSON examples:
                 return candidate
             candidate_index += 1
 
+    def _files_have_same_content(self, left_path, right_path):
+        if not os.path.isfile(left_path) or not os.path.isfile(right_path):
+            return False
+
+        try:
+            left_stat = os.stat(left_path)
+            right_stat = os.stat(right_path)
+        except OSError:
+            return False
+
+        if left_stat.st_size != right_stat.st_size:
+            return False
+
+        chunk_size = 1024 * 1024
+        with open(left_path, "rb") as left_file, open(right_path, "rb") as right_file:
+            while True:
+                left_chunk = left_file.read(chunk_size)
+                right_chunk = right_file.read(chunk_size)
+                if left_chunk != right_chunk:
+                    return False
+                if not left_chunk:
+                    return True
+
+    def _ensure_delete_backup_root(self, folder_path, delete_backup_root):
+        if delete_backup_root is not None:
+            return delete_backup_root
+
+        backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
+        return tempfile.mkdtemp(
+            prefix=".openclaw-delete-",
+            dir=backup_parent_dir,
+        )
+
+    def _backup_duplicate_source(
+        self,
+        folder_path,
+        delete_backup_root,
+        source_relative_path,
+        source_path,
+    ):
+        backup_root = self._ensure_delete_backup_root(folder_path, delete_backup_root)
+        backup_target = self._build_delete_backup_path(
+            backup_root,
+            source_relative_path,
+        )
+        backup_target = self._build_unique_backup_target(backup_target)
+        self._ensure_parent_directory(backup_target)
+        os.rename(source_path, backup_target)
+        return backup_root, backup_target
+
     def _merge_directory_into_existing_target(self, source_path, target_path):
         if not os.path.isdir(source_path):
             raise ValueError("Source path is not a directory")
@@ -1771,6 +1821,7 @@ Correct JSON examples:
                 created_now = False
                 merged_entries = []
                 source_was_directory = False
+                backup_entry = None
 
                 try:
                     if op_type == "create_folder":
@@ -1810,16 +1861,33 @@ Correct JSON examples:
                                 os.rename(source, target)
                         else:
                             if os.path.exists(target):
-                                results.append(
-                                    {
-                                        "success": False,
-                                        "operation": operation,
-                                        "error": "Target path already exists",
+                                if self._files_have_same_content(source, target):
+                                    delete_backup_root, backup_target = self._backup_duplicate_source(
+                                        folder_path,
+                                        delete_backup_root,
+                                        source_relative_path,
+                                        source,
+                                    )
+                                    backup_entry = {
+                                        "type": "delete",
+                                        "source": source,
+                                        "target": backup_target,
+                                        "temp_root": delete_backup_root,
+                                        "created_now": False,
+                                        "merged_entries": [],
                                     }
-                                )
-                                continue
-                            self._ensure_parent_directory(target)
-                            os.rename(source, target)
+                                else:
+                                    results.append(
+                                        {
+                                            "success": False,
+                                            "operation": operation,
+                                            "error": "Target path already exists",
+                                        }
+                                    )
+                                    continue
+                            else:
+                                self._ensure_parent_directory(target)
+                                os.rename(source, target)
                     elif op_type == "rename":
                         if os.path.isdir(source):
                             results.append(
@@ -1831,16 +1899,33 @@ Correct JSON examples:
                             )
                             continue
                         if os.path.exists(target):
-                            results.append(
-                                {
-                                    "success": False,
-                                    "operation": operation,
-                                    "error": "Target path already exists",
+                            if self._files_have_same_content(source, target):
+                                delete_backup_root, backup_target = self._backup_duplicate_source(
+                                    folder_path,
+                                    delete_backup_root,
+                                    source_relative_path,
+                                    source,
+                                )
+                                backup_entry = {
+                                    "type": "delete",
+                                    "source": source,
+                                    "target": backup_target,
+                                    "temp_root": delete_backup_root,
+                                    "created_now": False,
+                                    "merged_entries": [],
                                 }
-                            )
-                            continue
-                        self._ensure_parent_directory(target)
-                        os.rename(source, target)
+                            else:
+                                results.append(
+                                    {
+                                        "success": False,
+                                        "operation": operation,
+                                        "error": "Target path already exists",
+                                    }
+                                )
+                                continue
+                        else:
+                            self._ensure_parent_directory(target)
+                            os.rename(source, target)
                     elif op_type == "rename_folder":
                         if not os.path.isdir(source):
                             results.append(
@@ -1869,18 +1954,12 @@ Correct JSON examples:
                             self._ensure_parent_directory(target)
                             os.rename(source, target)
                     elif op_type == "delete":
-                        if delete_backup_root is None:
-                            backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
-                            delete_backup_root = tempfile.mkdtemp(
-                                prefix=".openclaw-delete-",
-                                dir=backup_parent_dir,
-                            )
-                        backup_target = self._build_delete_backup_path(
-                            delete_backup_root, source_relative_path
+                        delete_backup_root, backup_target = self._backup_duplicate_source(
+                            folder_path,
+                            delete_backup_root,
+                            source_relative_path,
+                            source,
                         )
-                        backup_target = self._build_unique_backup_target(backup_target)
-                        self._ensure_parent_directory(backup_target)
-                        os.rename(source, backup_target)
                         target = backup_target
                     else:
                         raise ValueError(f"Unsupported operation type: {op_type}")
@@ -1901,18 +1980,21 @@ Correct JSON examples:
                     )
                     continue
 
-                backup_info.append(
-                    {
-                        "type": op_type,
-                        "source": source,
-                        "target": target,
-                        "temp_root": delete_backup_root if op_type == "delete" else "",
-                        "created_now": created_now if op_type == "create_folder" else False,
-                        "merged_entries": merged_entries
-                        if op_type in {"move", "rename_folder"}
-                        else [],
-                    }
-                )
+                if backup_entry is not None:
+                    backup_info.append(backup_entry)
+                else:
+                    backup_info.append(
+                        {
+                            "type": op_type,
+                            "source": source,
+                            "target": target,
+                            "temp_root": delete_backup_root if op_type == "delete" else "",
+                            "created_now": created_now if op_type == "create_folder" else False,
+                            "merged_entries": merged_entries
+                            if op_type in {"move", "rename_folder"}
+                            else [],
+                        }
+                    )
 
                 if op_type == "rename_folder" or (op_type == "move" and source_was_directory):
                     applied_path_rewrites.append(

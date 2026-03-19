@@ -785,3 +785,102 @@ node --check renderer.js
 - 版本：1.0.0
 - 最后更新：2026-03-19
 - 已推送到 GitHub：`https://github.com/lpz7777777/OpenClaw_Files`
+
+---
+
+## 十三、补充开发记录（2026-03-19）
+
+### 1. “确认全部”后自动生成根目录 README
+
+补充了一个新的执行后动作：
+
+- 当用户点击“确认全部”并且本轮所有文件操作都成功执行后
+- 后端会自动扫描当前已整理完成的目录结构
+- 在所打开文件夹的根目录中写入新的 `README.md`
+- 内容包括：当前概览、一级结构说明、目录树概览、本次整理结果
+
+同时保证：
+
+- 单条“确认这条”不会触发 README 生成
+- 新写入的 README 也纳入回滚链路
+- 回滚时会恢复旧 README，或删除本轮新建的 README
+
+涉及文件：
+
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [backend/server.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/server.py)
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py)
+
+### 2. 执行与回滚鲁棒性修复
+
+围绕 `rename_folder`、目录合并、路径重写和重复文件冲突，补了一轮执行器稳定性修复：
+
+- 执行顺序调整为更适合目录重组的顺序，减少父目录先后变化引起的连锁失败
+- 父级 `rename_folder` 失败后，后续子路径会尝试回退到原路径继续执行
+- 成功执行的“目录型 move”现在也会参与后续路径重写
+- 回滚 `rename_folder` 时，如果原路径已经存在，不再直接失败，而是走安全合并回滚
+- 空操作（如 `rename_folder: A -> A`）会在归一化阶段被过滤
+- 目录 `move` 到已存在目录时，改为安全合并模式
+- 文件名中空格数量、轻微扩展名失真等模型输出偏差，执行器会做轻量模糊路径解析
+- 当文件型 `move/rename` 的目标已存在且内容完全相同时，自动按“去重成功”处理，并保留回滚能力
+
+实测覆盖：
+
+- `Test2`：多轮“分析 -> 执行 -> 回滚”验证通过
+- `Test`：多轮“分析 -> 执行”回归后，`Target path already exists` 冲突已压到 0
+
+涉及文件：
+
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py)
+
+### 3. Prompt 压缩与 Gateway context overflow 修复
+
+为解决大目录分析时的：
+
+> Gateway WebSocket request failed: Context overflow: prompt too large for the model
+
+补充了自适应 prompt 压缩链路：
+
+- 先以较完整的结构摘要发起分析
+- 如果 Gateway 返回 context overflow
+- 自动切换到更紧凑的 prompt profile 并重试
+- 同时将传给模型的 JSON 结构改为更紧凑的无缩进格式
+
+这样在 `Test2`、`Test3` 一类较大目录上，不再需要人工 `/reset`
+
+涉及文件：
+
+- [backend/file_analyzer.py](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py)
+
+### 4. 主题切换能力
+
+前端新增主题切换控件，并提供两套主题：
+
+- `当前工作区`：保留现有浅色工作区主题
+- `Mac 风格`：新增偏 macOS 的浅色玻璃质感主题
+
+Mac 风格主题特点：
+
+- 蓝白色系背景与面板
+- 更明显的玻璃感与模糊面板
+- 顶部模拟 macOS 红黄绿窗口控制点
+- 更圆润的控件与更轻的阴影层次
+- 主题选择持久化到本地，下次打开自动恢复
+
+涉及文件：
+
+- [index.html](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](file:///d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+### 5. 当前补充能力清单
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 确认全部后根目录 README 生成 | ✅ | 自动写入整理后的结构说明 |
+| README 回滚恢复 | ✅ | 与文件操作一起回滚 |
+| 执行器路径重写增强 | ✅ | 目录重命名/目录移动后自动跟踪 |
+| 重复文件自动去重 | ✅ | 同内容文件遇到同名目标可自动处理 |
+| 模糊路径解析 | ✅ | 处理空格、轻微扩展名偏差 |
+| Gateway prompt 自适应压缩 | ✅ | 避免 context overflow |
+| 主题切换 | ✅ | 当前工作区 + Mac 风格 |
