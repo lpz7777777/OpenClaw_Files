@@ -259,9 +259,10 @@ class FileAnalyzer:
 4. 需要新目录时，用 create_folder + move 表达。
 5. operations 的 source 和 target 必须是相对路径，统一使用 /。
 6. 只输出有把握的建议，不要虚构不存在的路径。
-7. 当前用于分析的代表性文件不少于 {file_count} 个，请优先基于 file_index 做文件级分析。
-8. 尽量输出至少 {required_summary_points} 条 summary_points。
-9. 输出必须是严格合法 JSON，只能使用双引号，不能附带解释文字或 Markdown。
+7. 让改动后各个文件夹都尽量带有前缀编号，例如：01_文件夹xxx，02_文件夹xxx，...
+8. 当前用于分析的代表性文件不少于 {file_count} 个，请优先基于 file_index 做文件级分析。
+9. 尽量输出至少 {required_summary_points} 条 summary_points。
+10. 输出必须是严格合法 JSON，只能使用双引号，不能附带解释文字或 Markdown。
 
 数据：
 {payload_json}

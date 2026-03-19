@@ -493,6 +493,19 @@ button:disabled {
     box-shadow: none;
 }
 
+.button-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+#wechatCleanupBtn {
+    display: inline-flex;
+    align-items: center;
+}
+
 .primary-btn {
     background: var(--accent);
     color: #fffdf8;
@@ -671,6 +684,13 @@ button:disabled {
     font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 700;
+}
+
+.tree-icon-image {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .tree-icon-folder {

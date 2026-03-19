@@ -58,8 +58,16 @@ const THEME_DEFINITIONS = [
     },
 ];
 const THEMES = new Set(THEME_DEFINITIONS.map((theme) => theme.id)); // 主题 ID 集合
-const DEFAULT_THEME = "workspace"; // 默认主题
-const DEFAULT_BDPAN_DAILY_TIME = "02:00"; // 默认百度网盘同步时间
+const DEFAULT_THEME = "mac"; // 默认主题
+const DEFAULT_BDPAN_DAILY_TIME = "12:00"; // 默认百度网盘同步时间
+const FILE_TYPE_ICON_ASSETS = {
+    word: "assets/icons/word_icon.png",
+    pdf: "assets/icons/PDF_icon.png",
+    excel: "assets/icons/excel_icon.png",
+    ppt: "assets/icons/ppt_icon.png",
+    zip: "assets/icons/zip_icon.png",
+    wechat: "assets/icons/wechat_icon.png",
+};
 
 /**
  * 应用状态管理
@@ -85,7 +93,7 @@ const state = {
     discardedOperationIndexes: new Set(),
     analysisTone: "idle",
     analysisMessage: "选择文件夹后，这里会显示 OpenClaw 输出的整理建议、操作计划和执行结果。",
-    currentTheme: "workspace",
+    currentTheme: "mac",
     cloudSyncStatus: null,
     cloudSyncFeedback: null,
     bdpanRemotePath: "",
@@ -701,9 +709,18 @@ function createTreeBranch(node, depth) {
             ? { label: node.expanded ? "[-]" : "[+]", tone: "folder" }
             : fileIconMeta(node.name, node.extension);
 
-    const icon = document.createElement("span");
-    icon.className = `tree-icon tree-icon-${iconMeta.tone}`;
-    icon.textContent = iconMeta.label;
+    let icon;
+    if (iconMeta.kind === "image") {
+        icon = document.createElement("img");
+        icon.className = "tree-icon-image";
+        icon.src = iconMeta.src;
+        icon.alt = iconMeta.alt || "";
+        icon.draggable = false;
+    } else {
+        icon = document.createElement("span");
+        icon.className = `tree-icon tree-icon-${iconMeta.tone}`;
+        icon.textContent = iconMeta.label;
+    }
 
     const label = document.createElement("span");
     label.className = "tree-label";
@@ -2127,7 +2144,24 @@ function looksBinary(buffer) {
  */
 function fileIconMeta(fileName, extension) {
     const normalizedName = String(fileName || "").toLowerCase();
-    const iconMap = {
+    const extensionToAsset = {
+        ".doc": FILE_TYPE_ICON_ASSETS.word,
+        ".docx": FILE_TYPE_ICON_ASSETS.word,
+        ".txt": FILE_TYPE_ICON_ASSETS.word,
+        ".md": FILE_TYPE_ICON_ASSETS.word,
+        ".pdf": FILE_TYPE_ICON_ASSETS.pdf,
+        ".xls": FILE_TYPE_ICON_ASSETS.excel,
+        ".xlsx": FILE_TYPE_ICON_ASSETS.excel,
+        ".csv": FILE_TYPE_ICON_ASSETS.excel,
+        ".ppt": FILE_TYPE_ICON_ASSETS.ppt,
+        ".pptx": FILE_TYPE_ICON_ASSETS.ppt,
+        ".zip": FILE_TYPE_ICON_ASSETS.zip,
+        ".rar": FILE_TYPE_ICON_ASSETS.zip,
+        ".7z": FILE_TYPE_ICON_ASSETS.zip,
+        ".tar": FILE_TYPE_ICON_ASSETS.zip,
+        ".gz": FILE_TYPE_ICON_ASSETS.zip,
+    };
+    const textFallbackMap = {
         ".js": { label: "JS", tone: "script" },
         ".jsx": { label: "JS", tone: "script" },
         ".ts": { label: "TS", tone: "script" },
@@ -2142,16 +2176,6 @@ function fileIconMeta(fileName, extension) {
         ".sql": { label: "SQL", tone: "data" },
         ".db": { label: "DB", tone: "data" },
         ".sqlite": { label: "DB", tone: "data" },
-        ".md": { label: "MD", tone: "doc" },
-        ".txt": { label: "TXT", tone: "doc" },
-        ".doc": { label: "DOC", tone: "doc" },
-        ".docx": { label: "DOC", tone: "doc" },
-        ".pdf": { label: "PDF", tone: "doc" },
-        ".xls": { label: "XLS", tone: "sheet" },
-        ".xlsx": { label: "XLS", tone: "sheet" },
-        ".csv": { label: "CSV", tone: "sheet" },
-        ".ppt": { label: "PPT", tone: "slides" },
-        ".pptx": { label: "PPT", tone: "slides" },
         ".png": { label: "IMG", tone: "media" },
         ".jpg": { label: "IMG", tone: "media" },
         ".jpeg": { label: "IMG", tone: "media" },
@@ -2164,11 +2188,6 @@ function fileIconMeta(fileName, extension) {
         ".mp4": { label: "VID", tone: "media" },
         ".mov": { label: "VID", tone: "media" },
         ".avi": { label: "VID", tone: "media" },
-        ".zip": { label: "ZIP", tone: "archive" },
-        ".rar": { label: "ZIP", tone: "archive" },
-        ".7z": { label: "ZIP", tone: "archive" },
-        ".tar": { label: "ZIP", tone: "archive" },
-        ".gz": { label: "ZIP", tone: "archive" },
         ".env": { label: "ENV", tone: "config" },
         ".yml": { label: "CFG", tone: "config" },
         ".yaml": { label: "CFG", tone: "config" },
@@ -2177,10 +2196,30 @@ function fileIconMeta(fileName, extension) {
     };
 
     if (normalizedName === "readme.md") {
-        return { label: "DOC", tone: "doc" };
+        return {
+            kind: "image",
+            src: FILE_TYPE_ICON_ASSETS.word,
+            alt: "文档",
+        };
     }
 
-    return iconMap[extension] || { label: "FILE", tone: "generic" };
+    if (normalizedName.includes("wechat") || normalizedName.includes("微信")) {
+        return {
+            kind: "image",
+            src: FILE_TYPE_ICON_ASSETS.wechat,
+            alt: "微信",
+        };
+    }
+
+    if (extensionToAsset[extension]) {
+        return {
+            kind: "image",
+            src: extensionToAsset[extension],
+            alt: extension.replace(".", "").toUpperCase() || "FILE",
+        };
+    }
+
+    return textFallbackMap[extension] || { label: "FILE", tone: "generic" };
 }
 
 /**
@@ -2238,8 +2277,7 @@ function escapeHtml(value) {
  * 初始化主题
  */
 function initializeTheme() {
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    applyTheme(storedTheme && THEMES.has(storedTheme) ? storedTheme : DEFAULT_THEME);
+    applyTheme(DEFAULT_THEME);
 }
 
 /**

@@ -4,154 +4,251 @@
 
 **基于 Electron + Python 的智能文件整理桌面工具**
 
-通过 OpenClaw AI 分析文件夹结构，生成可确认、可回滚的整理建议
+通过 OpenClaw AI 分析目录结构，生成可确认、可执行、可回滚的文件整理方案，并扩展支持百度网盘同步与微信文件专项清理。
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/lpz7777777/OpenClaw_Files)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue)]()
+[![Desktop](https://img.shields.io/badge/Desktop-Electron-47848F?logo=electron&logoColor=white)]()
+[![Backend](https://img.shields.io/badge/Backend-Python-3776AB?logo=python&logoColor=white)]()
 
 </div>
 
 ---
 
-## 📸 程序截图
+## 📑 目录导航
+
+- [项目简介](#-项目简介)
+- [界面截图](#-界面截图)
+- [核心能力](#-核心能力)
+- [技术栈](#-技术栈)
+- [安装与配置](#-安装与配置)
+- [使用流程](#-使用流程)
+- [支持的文件预览](#-支持的文件预览)
+- [支持的操作类型](#-支持的操作类型)
+- [项目结构](#-项目结构)
+- [近期改动](#-近期改动)
+- [打包与分发](#-打包与分发)
+- [验证与排错](#-验证与排错)
+- [常见问题](#-常见问题)
+
+---
+
+## 🎯 项目简介
+
+OpenClaw Files 是一个围绕"本地文件整理"设计的桌面工作区：
+
+- 📁 **左侧资源管理器** - 递归浏览当前目录结构
+- 📄 **中间文档工作区** - 支持多标签预览 Word、Excel、文本等内容
+- 🤖 **右侧分析面板** - 展示 OpenClaw 输出的整理摘要、分类建议和可执行操作
+- ⚡ **底部执行链路** - 支持逐条确认、确认全部、失败自动丢弃和最近一轮回滚
+- ☁️ **百度网盘同步** - 中间区域下方集成，可立即上传或创建每日同步任务
+- 💬 **微信文件清理** - 专项入口，把微信文件从源目录整理到目标目录并自动归档
+
+---
+
+## 📸 界面截图
+
+### 🖥️ 主界面
+
+<div align="center">
+  <img src="./screenshots/main-interface.png" alt="OpenClaw Files 主界面" width="100%">
+</div>
 
 <div align="center">
 
-![主界面](./screenshots/main-interface.png)
-*主界面 - 三栏布局，左侧资源树、中间文档预览、右侧分析面板*
-
-![主题切换](./screenshots/theme-switcher.png)
-*主题切换 - 支持多套精美主题*
-
-![文件整理](./screenshots/file-organization.png)
-*文件整理 - 智能分析并生成整理建议*
-
-> 💡 **提示**：以上截图位于 `screenshots/` 目录，如未显示请查看项目仓库
+**主界面** - 三栏工作区布局：左侧资源树、中间文档预览与云同步区、右侧 AI 分析与执行面板
 
 </div>
 
 ---
 
-## ✨ 功能特性
+### 🎨 主题展示
 
-### 🎯 核心功能
+应用提供多套精美主题，默认以 **mac 主题** 启动：
 
-<table>
-<tr>
-<td width="50%">
+#### 雾杉主题
+<div align="center">
+  <img src="./screenshots/theme-switcher_wushan.png" alt="雾杉主题" width="90%">
+</div>
 
-**🧠 智能分析**
-- 递归扫描各级子目录
-- 构建 file_index 文件索引
-- 依据文件名和文件类型重新规划目录结构
+#### 北岸主题
+<div align="center">
+  <img src="./screenshots/theme-switcher_beian.png" alt="北岸主题" width="90%">
+</div>
 
-</td>
-<td width="50%">
+#### 琥珀主题
+<div align="center">
+  <img src="./screenshots/theme-switcher_hupo.png" alt="琥珀主题" width="90%">
+</div>
 
-**🎨 可视化工作区**
-- 三栏布局设计
-- 左侧资源树
-- 中间文档预览
-- 右侧分析面板
+#### 雨后主题
+<div align="center">
+  <img src="./screenshots/theme-switcher_yuhou.png" alt="雨后主题" width="90%">
+</div>
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+#### 珊瑚主题
+<div align="center">
+  <img src="./screenshots/theme-switcher_shanhu.png" alt="珊瑚主题" width="90%">
+</div>
 
-**✅ 逐条确认**
-- 每条建议可单独确认执行
-- 也可一键执行全部
-- 完全掌控整理过程
+<div align="center">
 
-</td>
-<td width="50%">
+每套主题都有独特的色彩风格和氛围，适合不同的使用场景和个人偏好。
 
-**↩️ 安全回滚**
-- 支持最近一轮操作的逆序回滚
-- 操作失误无需担心
-- 数据安全有保障
+</div>
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+---
 
-**📄 文档预览**
-- 支持 Word (.docx) 预览
-- 支持 Excel (.xlsx/.xls/.csv) 预览
-- 文本文件完整预览
+### 📋 整理建议
 
-</td>
-<td width="50%">
+<div align="center">
+  <img src="./screenshots/suggestions.png" alt="整理建议" width="100%">
+</div>
 
-**🗂️ 规整化建议**
-- 自动生成创建文件夹建议
-- 重命名文件夹规范化
-- 智能目录结构优化
+<div align="center">
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+**整理建议面板** - AI 分析生成的结构化整理方案，支持逐条确认或批量执行
 
-**🔍 启发式识别**
-- 自动识别 Office 临时文件
-- 识别重复下载文件
-- 识别已解压压缩包
+</div>
 
-</td>
-<td width="50%">
+---
 
-**☁️ 百度网盘同步**
-- 支持将当前目录上传到百度网盘
-- 可设置每日自动同步时间
-- 应用内管理定时任务
+### ☁️ 百度网盘同步
 
-</td>
-</tr>
-</table>
+<div align="center">
+  <img src="./screenshots/baidu_1.png" alt="百度网盘同步 - 1" width="48%">
+  <img src="./screenshots/baidu_2.png" alt="百度网盘同步 - 2" width="48%">
+</div>
 
-### 🎨 界面特性
+<div align="center">
 
-- ✨ 浅色扁平主题，清晰舒适
-- 🎯 文件类型图标与颜色区分
-- 📊 结构化分析摘要显示
-- 📑 多标签页文件预览
-- 🌈 多主题切换支持
+**百度网盘同步** - 支持立即上传、设置每日同步时间、管理定时任务
+
+</div>
+
+---
+
+### 💬 微信文件清理
+
+<div align="center">
+  <img src="./screenshots/wechat-settings.png" alt="微信文件清理设置" width="100%">
+</div>
+
+<div align="center">
+
+**微信文件清理配置** - 右键点击配置源目录与目标目录，支持跨目录整理
+
+</div>
+
+---
+
+### 🧹 清理前对比
+
+<div align="center">
+  <img src="./screenshots/before_clear_normal.png" alt="清理前状态" width="100%">
+</div>
+
+<div align="center">
+
+**清理前状态** - 展示整理前的目录结构和文件分布
+
+</div>
+
+---
+
+### 📷 更多截图预留
+
+| 模块 | 截图状态 | 说明 |
+|------|----------|------|
+| 整理建议执行过程 | 🔲 待补充 | 展示逐条确认、确认全部和执行进度 |
+| 执行结果与回滚 | 🔲 待补充 | 展示执行成功/失败状态和回滚操作 |
+| 文件去重效果 | 🔲 待补充 | 展示重复文件识别和自动去重 |
+| 目录结构对比 | 🔲 待补充 | 整理前后的目录树对比 |
+| 文档预览功能 | 🔲 待补充 | Word/Excel 文件预览效果 |
+| 多标签页管理 | 🔲 待补充 | 多标签页同时预览多个文件 |
+
+> 💡 **提示**：建议后续补充以上截图，让 README 更加完整展示应用的各项功能。
+
+---
+
+## ✨ 核心能力
+
+### 🧠 智能整理工作流
+
+- 🔍 递归扫描目录并构建 `folder_index` / `file_index`
+- 🤖 由 OpenClaw 根据文件级信息生成更细的整理方案
+- 📦 支持 `move`、`rename`、`rename_folder`、`create_folder`、`delete`
+- ✅ 每条建议都可以单独确认，也可以一键执行全部
+- ❌ 执行失败的建议会自动丢弃，避免整批流程卡死
+- ↩️ 最近一轮操作可逆序回滚
+
+### 💬 微信文件专项清理
+
+- 🎯 顶部工具栏新增"微信文件清理"按钮
+- ⚡ 左键可直接按已保存配置启动专项分析
+- ⚙️ 右键弹窗可填写微信文件夹和整理目标文件夹
+- 📂 源目录与目标目录分离，支持跨目录整理
+- 🗂️ 自动按文件类型归档到目标目录
+- 🔀 基于文件内容识别完全重复文件并自动去重
+- ✅ 目标目录中已存在同内容文件时会自动按"去重成功"处理
+- 🛡️ 遇到同名不同内容文件时自动改成安全文件名，避免覆盖
+
+### 📄 文档预览与工作区
+
+- 🖥️ 三栏工作区布局，适合边看目录边看建议
+- 📑 中间工作区支持多标签页预览
+- 📝 支持 Word `.docx`、Excel `.xlsx/.xls/.csv`、文本和代码文件预览
+- 📊 根目录概览标签可查看当前目录摘要与统计信息
+
+### ☁️ 百度网盘同步
+
+- ⬆️ 可将当前目录立即上传到百度网盘
+- ⏰ 支持设置"每日同步时间"与时区
+- 📋 应用内可查看和取消当前应用创建的任务
+- 📊 顶部栏会显示 Gateway 状态与任务概览
+- 🪟 同时兼容 Windows 本机 CLI 与 WSL CLI
+
+### 🛡️ 执行稳定性与安全性
+
+- 🔄 `rename_folder` 支持安全合并已有目录
+- 📍 后续操作可自动跟踪已改名目录路径
+- 🎯 对轻微扩展名偏差、空格差异做模糊路径匹配
+- 💾 `delete` 操作采用同盘临时备份区，便于回滚
+- ✅ "源路径已不存在但目标已到位"会视为已成功应用
+- 📄 确认全部后，只要本轮有成功执行的操作，就会在根目录生成结构说明 `README.md`
 
 ---
 
 ## 🛠️ 技术栈
 
-| 层级 | 技术 |
-|:----:|------|
-| **前端** | Electron + HTML/CSS/JavaScript |
-| **后端** | Python + HTTP Server |
-| **AI** | OpenClaw Gateway (WebSocket) 或 Anthropic API |
+| 层级 | 技术 | 描述 |
+|:----:|------|------|
+| 🎨 **前端** | Electron + HTML + CSS + JavaScript | 跨平台桌面应用界面 |
+| 🐍 **后端** | Python + 内置 HTTP Server | 文件分析与执行引擎 |
+| 🤖 **AI** | OpenClaw Gateway 或 Anthropic API | 智能整理方案生成 |
+| 📁 **文件执行** | 本地文件系统操作 + 可回滚备份链路 | 安全可靠的文件操作 |
+| ☁️ **同步能力** | OpenClaw CLI + bdpan CLI | 百度网盘同步支持 |
 
 ---
 
-## 📦 安装
+## 📦 安装与配置
 
-### 1. 克隆仓库
+### 1️⃣ 克隆仓库
 
 ```bash
 git clone https://github.com/lpz7777777/OpenClaw_Files.git
 cd OpenClaw_Files
 ```
 
-### 2. 安装依赖
+### 2️⃣ 安装依赖
 
 ```bash
 npm install
 pip install -r requirements.txt
 ```
 
----
-
-## ⚙️ 配置
+### 3️⃣ 配置环境变量
 
 复制环境变量模板：
 
@@ -159,9 +256,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-### 方式一：使用 OpenClaw Gateway（推荐）
-
-如果你的 OpenClaw Gateway 运行在 `ws://127.0.0.1:18789`：
+#### 方式一：使用 OpenClaw Gateway（推荐）
 
 ```env
 USE_GATEWAY=true
@@ -181,44 +276,31 @@ OPENCLAW_CLI_MODE=auto
 BDPAN_CLI_MODE=auto
 ```
 
-### Windows 与 WSL 兼容说明
-
-当前版本同时兼容这两类安装方式：
-
-- ✅ Windows 本机直接安装 `openclaw` / `bdpan`
-- ✅ 仅在 WSL 内安装 `openclaw` / `bdpan`
-
-**默认行为** `auto`：
-1. 先尝试 Windows 本机 CLI
-2. 找不到时再自动回退到 WSL CLI
-
-如需强制指定，可在 `.env` 中设置：
-
-```env
-# auto / native / wsl
-OPENCLAW_CLI_MODE=auto
-BDPAN_CLI_MODE=auto
-
-# 如需指定某个 WSL 发行版，可填写名称
-OPENCLAW_WSL_DISTRO=Ubuntu
-BDPAN_WSL_DISTRO=Ubuntu
-
-# 如需手动指定 CLI 路径，也可以直接写
-# Windows 示例：C:\Users\you\AppData\Roaming\npm\openclaw.cmd
-# WSL 示例：/home/you/.local/bin/openclaw
-# OPENCLAW_CLI_PATH=
-# BDPAN_BIN=
-```
-
-> **说明**：
-> - 如果使用 WSL 模式，应用会自动把 Windows 路径转换成 `/mnt/c/...` / `/mnt/d/...` 形式再传给 CLI
-> - 顶部 Gateway WebSocket 地址仍按 `GATEWAY_URL` 连接；只要 Windows 侧能访问到 WSL 中暴露的 Gateway 地址即可
-
-### 方式二：直连 Anthropic API
+#### 方式二：直连 Anthropic API
 
 ```env
 USE_GATEWAY=false
 ANTHROPIC_API_KEY=your_actual_api_key_here
+```
+
+### 🪟 Windows 与 WSL 兼容说明
+
+当前版本同时兼容以下两类安装方式：
+
+- ✅ Windows 本机直接安装 `openclaw` / `bdpan`
+- 🐧 仅在 WSL 内安装 `openclaw` / `bdpan`
+
+**默认行为**为 `auto`：
+1. 先尝试 Windows 本机 CLI
+2. 找不到时自动回退到 WSL CLI
+
+如需强制指定，可在 `.env` 中设置：
+
+```env
+OPENCLAW_CLI_MODE=auto
+BDPAN_CLI_MODE=auto
+OPENCLAW_WSL_DISTRO=Ubuntu
+BDPAN_WSL_DISTRO=Ubuntu
 ```
 
 ---
@@ -230,227 +312,206 @@ npm start
 ```
 
 应用会同时启动：
-- 🐍 Python 后端服务（默认端口 8765）
+- 🐍 Python 后端服务，默认端口 `8765`
 - ⚡ Electron 桌面界面
 
 ---
 
 ## 📖 使用流程
 
-<div align="center">
-
 ```mermaid
 graph LR
-    A[选择文件夹] --> B[等待分析]
-    B --> C[查看建议]
-    C --> D{确认执行}
-    D -->|逐条确认 | E[执行完成]
-    D -->|全部执行 | E
-    E --> F{需要回滚？}
-    F -->|是 | G[回滚操作]
-    F -->|否 | H[完成]
+    A[📂 选择文件夹] --> B[🤖 等待 OpenClaw 分析]
+    B --> C[📋 查看摘要和操作列表]
+    C --> D{⚡ 如何执行}
+    D --> E[✅ 逐条确认]
+    D --> F[⚡ 确认全部]
+    E --> G[✅ 执行完成]
+    F --> G
+    G --> H{↩️ 需要回滚？}
+    H -->|是 | I[🔙 回滚最近一轮]
+    H -->|否 | J[🎉 整理完成]
 ```
 
-</div>
+### 标准整理模式
 
-1. **选择文件夹**：点击"选择文件夹"，选择需要整理的本地目录
-2. **等待分析**：系统会递归扫描目录结构，通过 AI 生成整理建议
-3. **查看建议**：右侧面板显示结构化分析摘要和操作建议
-4. **确认执行**：
-   - **逐条确认**：点击每条建议的"确认这条"按钮
-   - **全部执行**：点击底部"确认全部"按钮
-5. **回滚（可选）**：如有需要，可执行最近一轮操作的回滚
+1. 📂 打开一个本地目录
+2. ⏳ 等待分析结果生成
+3. 📋 查看分类建议、操作列表和整理摘要
+4. ✅ 逐条确认或确认全部执行
+5. ↩️ 如有需要，回滚最近一轮操作
+
+### 💬 微信专项清理模式
+
+1. 🎯 右键点击"微信文件清理"
+2. ⚙️ 填写微信文件夹和整理目标文件夹
+3. 💾 保存后左键启动分析，或直接"保存并开始"
+4. 📊 查看按类型归档和去重后的整理方案
+5. ✅ 确认执行，将文件归档到目标目录
+
+---
+
+## 📄 支持的文件预览
+
+| 类型 | 扩展名 | 支持程度 | 图标 |
+|:----:|--------|:--------:|:----:|
+| 📝 **文本与代码** | `.txt` `.md` `.json` `.js` `.py` `.html` `.css` | 完整预览 | 📄 |
+| 📖 **Word 文档** | `.docx` | 正文段落预览 | 📘 |
+| 📊 **Excel 表格** | `.xlsx` `.xls` `.csv` | 首个工作表预览 | 📗 |
+| 📕 **旧版 Word** | `.doc` | 兼容提示 | 📕 |
+| 🗂️ **其他二进制** | 其他格式 | 占位提示 | 📦 |
+
+---
+
+## 🔧 支持的操作类型
+
+| 操作类型 | 说明 | 安全机制 | 图标 |
+|:--------:|------|:--------:|:----:|
+| ➡️ **move** | 移动文件或文件夹到新位置 | 支持回滚 | 📦 |
+| 🏷️ **rename** | 重命名文件 | 支持回滚 | ✏️ |
+| 📁 **rename_folder** | 重命名或合并文件夹 | 安全合并模式 | 🗂️ |
+| 🗑️ **delete** | 删除文件或目录 | 同盘临时备份区 | ❌ |
+| ➕ **create_folder** | 创建新的分类目录 | 支持回滚 | 📂 |
+
+### 🗑️ delete 备份机制
+
+- 💾 删除的文件会先移动到同盘临时备份区
+- ↩️ 回滚时从备份区恢复
+- 🛡️ 避免跨盘删除或直接彻底丢失
+
+### 🔍 启发式高置信识别
+
+系统会自动识别以下模式并补充建议：
+
+| 模式 | 建议类型 | 示例 |
+|------|----------|------|
+| 📦 已有同名解压目录的压缩包 | `delete` | `demo.zip` vs `demo/` |
+| 📝 Office 临时文件 | `delete` | `~$document.docx` |
+| 🔁 重复下载文件 | `rename` | `文件名 (1).docx` |
+| 📁 父目录与同名包装子目录 | `move + delete` | `folder/folder/files` |
 
 ---
 
 ## 📁 项目结构
 
-```
+```text
 OpenClaw_Files/
+├── assets/
+│   └── icons/              # 📁 文件类型与微信图标资源
 ├── backend/
-│   ├── file_analyzer.py    # 文件分析与 AI 调用
-│   ├── gateway_client.py   # OpenClaw Gateway 客户端
-│   └── server.py           # HTTP 服务
-├── index.html              # 主界面
-├── renderer.js             # 前端逻辑
-├── main.js                 # Electron 主进程
-├── styles.css              # 样式
-├── test_gateway.py         # Gateway 连接测试
-├── discover_gateway.py     # Gateway 能力探测
-├── .env.example            # 环境变量模板
-├── requirements.txt        # Python 依赖
-├── package.json            # Node 依赖
-├── DEV_LOG.md              # 开发日志
-└── README.md               # 本文件
+│   ├── cloud_sync.py       # ☁️ 百度网盘同步能力
+│   ├── command_runtime.py  # 🪟 Windows / WSL CLI 兼容层
+│   ├── file_analyzer.py    # 🔍 文件分析、执行与回滚
+│   ├── gateway_client.py   # 🤖 OpenClaw Gateway 客户端
+│   └── server.py           # 🌐 HTTP 服务入口
+├── screenshots/            # 📸 README 截图资源
+├── DEV_LOG.md              # 📝 开发日志
+├── index.html              # 🖥️ 主界面
+├── main.js                 # ⚡ Electron 主进程
+├── renderer.js             # 🎨 前端渲染逻辑
+├── styles.css              # 💅 界面样式
+└── README.md               # 📖 本文件
 ```
 
 ---
 
-## 🔍 Gateway 验证
+## 📝 近期改动
 
-可以使用以下脚本验证 Gateway 连接：
+### 💬 微信文件清理
+
+- ➕ 新增顶部"微信文件清理"按钮
+- ⚡ 左键启动专项分析，右键打开配置弹窗
+- 📂 支持源目录与目标目录分离
+- 🗂️ 支持按文件类型归档、内容去重和安全命名
+
+### 🎨 默认 mac 主题与图标资源升级
+
+- 🚀 应用启动时默认进入 `mac` 主题
+- 🎯 默认主题值也已切换为 `mac`
+- 📁 资源管理器对常见文件类型切换为图片图标资源
+- 💬 微信文件清理按钮加入微信图标
+
+### ☁️ 百度网盘同步
+
+- 📍 中间工作区下方集成百度网盘同步模块
+- ⬆️ 支持立即上传、每日同步和任务取消
+- 📊 启动时自动刷新顶部状态与任务概览
+
+---
+
+## 📦 打包与分发
+
+### 构建安装包
+
+```bash
+npm run build
+```
+
+构建完成后，可在 `dist` 目录找到生成的 Windows 安装包。
+
+### 💻 系统要求
+
+| 要求 | 说明 |
+|:----:|------|
+| 🖥️ **操作系统** | Windows 10 或 Windows 11 |
+| 🔧 **架构** | 64 位 |
+| 💾 **内存** | 至少 4GB |
+| 💽 **磁盘空间** | 至少 100MB 可用空间 |
+| ☁️ **外部依赖** | 如需云同步，请安装 OpenClaw / bdpan |
+
+---
+
+## 🔍 验证与排错
+
+### 🤖 Gateway 验证
 
 ```bash
 python test_gateway.py
 python discover_gateway.py
 ```
 
-**验证内容**：
-- ✅ WebSocket 握手是否成功
-- ✅ 当前 token/password 是否可用
-- ✅ 当前会话键是否正确
-- ✅ chat.history / chat.send 是否被 scope 限制
+### 🔧 常用静态检查
 
----
-
-## 📄 支持的文件预览
-
-| 类型 | 扩展名 | 支持程度 |
-|:----:|--------|:--------:|
-| **文本文件** | .txt, .md, .json, .js, .py, .html, .css 等 | 完整预览 |
-| **Word 文档** | .docx | 正文段落预览 |
-| **Excel 表格** | .xlsx, .xls, .csv | 首个工作表预览 |
-| **旧版 Word** | .doc | 兼容提示 |
-| **其他文件** | 二进制文件 | 占位提示 |
-
----
-
-## 🔧 支持的操作类型
-
-| 操作类型 | 说明 | 安全机制 |
-|:--------:|------|:--------:|
-| **move** | 移动文件/文件夹到新位置 | 支持回滚 |
-| **rename** | 重命名文件 | 支持回滚 |
-| **rename_folder** | 重命名/合并文件夹 | 安全合并模式 |
-| **delete** | 删除文件 | 同盘临时备份区 |
-| **create_folder** | 创建新的分类文件夹 | 支持回滚 |
-
-**delete 操作备份机制：**
-- 📦 删除的文件移动到同盘临时备份区：`{目标盘符}\.openclaw-delete-{随机后缀}\`
-- ↩️ 回滚时从备份区恢复
-- 💾 避免跨盘移动报错
-
-**rename_folder 安全合并：**
-- ✅ 目标目录不存在：直接重命名
-- 🔄 目标目录已存在：检查子项冲突后合并
-
-**启发式建议识别：**
-
-系统会自动识别以下高置信模式并生成建议：
-
-| 模式 | 建议类型 |
-|------|----------|
-| 已有同名解压目录的压缩包 | delete |
-| ~$...docx/xlsx/pptx (Office 临时文件) | delete |
-| 文件名 (1).docx (重复下载) | rename |
-| 父目录 + 同名包装子目录 | move + delete |
-
----
-
-## 📝 最新改动
-
-### 📄 执行后自动生成根目录 README
-
-当你点击"确认全部"并且本轮操作全部成功后，应用会在当前打开文件夹的根目录自动写入一个新的 `README.md`，内容包括：
-
-- 📋 当前目录概览
-- 🏗️ 一级结构说明
-- 🌳 目录树概览
-- ✨ 本次整理结果
-
-> 这个 README 会一并纳入回滚；如果你回滚最近一轮操作，README 也会恢复到原状态。
-
-### 🛡️ 执行器稳定性增强
-
-最近补了一轮针对真实测试目录的执行器修复，主要解决了这些常见失败：
-
-- ❌ 父目录已重命名/已移动后，后续子路径找不到
-- ❌ 目标目录已存在时的目录合并冲突
-- ❌ 文件名空格数量或扩展名轻微偏差导致的路径匹配失败
-- ❌ 同名目标已存在但其实是重复文件的冲突
-- ❌ `rename_folder: A -> A` 这类空操作
-
-**当前执行器现在支持：**
-- ✅ 目录型 move 的后续路径自动重写
-- ✅ rename_folder 安全合并与安全回滚
-- ✅ 同内容重复文件自动去重并保留回滚能力
-- ✅ 大目录执行时更稳的错误隔离与路径恢复
-
-### 🗜️ 大目录分析的 Gateway 自适应压缩
-
-为避免大目录分析时触发：
-
-```
-Context overflow: prompt too large for the model
+```bash
+node --check renderer.js
+node --check main.js
+python -m py_compile backend/file_analyzer.py backend/server.py backend/cloud_sync.py
 ```
 
-后端现在会自动在不同 prompt profile 之间降级重试，用更紧凑的结构摘要再次请求 OpenClaw Gateway。也就是说，对于 `Test2`、`Test3` 一类目录，不再需要你手动 `/reset` 才能继续分析。
-
-### 🎨 主题切换
-
-顶部工具区新增了主题切换器，目前提供六套主题：
-
-| 主题 | 风格描述 |
-|:----:|----------|
-| **雾杉** | 暖纸质感、沉稳配色，适合长时间整理文件 |
-| **晴空** | 明亮玻璃感和轻盈高光，保留 macOS 风格气质 |
-| **北岸** | 冷静蓝灰与工程线稿感，适合偏技术型工作流 |
-| **琥珀** | 奶油纸页和琥珀点缀，像在桌面上整理实体档案 |
-| **雨后** | 低饱和绿调与柔雾背景，视觉更松弛 |
-| **珊瑚** | 柔和珊瑚色和清晨云雾感，页面更有呼吸感 |
-
-> 主题选择会保存在本地，下次打开应用会自动恢复。
-
 ---
 
-## ⚠️ 注意事项
+## ❓ 常见问题
 
-- 💾 执行文件整理前，建议先备份重要数据
-- ↩️ 回滚只支持最近一轮操作
-- 🌐 如果 Gateway 模式不可用，应用会回退到直连 Anthropic API 模式
-- 🔑 如果未配置有效的 API key 且 Gateway 也不可用，后端会在分析时提示配置错误
+### Q: 为什么 Gateway 连接失败？
 
----
+**A:** 检查以下几点：
+1. ✅ 确认 OpenClaw Gateway 是否运行在指定地址
+2. ✅ 检查 `.env` 中的 `GATEWAY_URL` 配置是否正确
+3. ✅ 验证 token 和会话键是否有效
+4. ✅ 使用 `test_gateway.py` 和 `discover_gateway.py` 脚本测试
 
-## 📌 自动丢弃任务的 README 生成
+### Q: 百度网盘同步不工作？
 
-即使存在自动丢弃的任务，只要本轮有成功执行的操作，应用仍会在根目录生成 README.md 文件。README 内容会反映实际执行结果，包括成功、失败和丢弃的任务数量。
+**A:** 确保：
+1. ✅ 已安装 `bdpan` CLI 工具
+2. ✅ 已登录百度网盘账号
+3. ✅ 目标路径使用相对 `/apps/bdpan/` 路径
+4. ✅ 检查后端日志中的具体错误信息
 
----
+### Q: 微信文件清理找不到源目录？
 
-## 📦 可执行文件生成与分发
+**A:** 检查：
+1. ✅ 微信文件夹路径是否正确
+2. ✅ 是否有权限访问该目录
+3. ✅ 路径格式是否为 Windows 绝对路径
+4. ✅ 重新右键配置并保存
 
-### 生成可执行文件
+### Q: 如何回滚操作？
 
-1. **安装依赖**
-   ```bash
-   npm install
-   ```
-
-2. **执行打包命令**
-   ```bash
-   npm run build
-   ```
-
-3. **查找安装包**
-   打包完成后，在 `dist` 目录中找到生成的 `.exe` 安装文件。
-
-### 分发步骤
-
-1. 📤 将生成的安装文件（`.exe`）分发给其他用户
-2. 💻 用户双击安装文件，按照提示完成安装
-3. 🚀 安装完成后，用户可以在开始菜单或桌面找到应用图标
-4. ▶️ 首次运行时，应用会自动创建必要的配置文件
-
-### 系统要求
-
-| 要求 | 说明 |
-|:----:|------|
-| **操作系统** | Windows 10 或 Windows 11 |
-| **架构** | 64 位操作系统 |
-| **内存** | 至少 4GB |
-| **磁盘空间** | 至少 100MB 可用 |
-| **依赖** | 安装有 OpenClaw（用于百度网盘同步功能） |
+**A:** 
+1. ✅ 仅支持回滚最近一轮操作
+2. ✅ 点击右侧面板的"回滚"按钮
+3. ✅ 确认回滚后，文件将恢复到操作前状态
 
 ---
 
@@ -460,93 +521,32 @@ MIT License
 
 ---
 
-## 📎 附录：Git 推送方法
+## 📎 附录：GitHub 推送异常处理
 
-### 问题背景
+如果你的全局 Git 配置把 GitHub 请求重写到 `gitclone.com`，在服务异常时可能会出现 `502`。可以用下面的方法恢复正常推送。
 
-如果你的全局 Git 配置中有类似以下配置：
-
-```bash
-url.https://gitclone.com/github.com/.insteadof=ssh://git@github.com/
-url.https://gitclone.com/github.com/.insteadof=git@github.com:
-url.https://gitclone.com/github.com/.insteadof=https://github.com/
-```
-
-这会导致所有 GitHub 请求被重写到 `gitclone.com`，当该服务不可用时会返回 502 错误。
-
-### 解决方案
-
-**方案一：临时移除全局重写规则（推荐）**
+### 方案一：移除全局重写规则 ✅
 
 ```bash
-# 移除 gitclone 重写规则
 git config --global --remove-section url."https://gitclone.com/github.com/"
-
-# 然后正常推送
 git add .
 git commit -m "提交信息"
 git push origin main
 ```
 
-**方案二：使用 -c 参数临时覆盖**
+### 方案二：临时覆盖 insteadOf
 
 ```bash
 git -c url."https://github.com/".insteadOf= push origin main
 ```
 
-**方案三：直接修改远程 URL**
+### 方案三：直接修正远程地址
 
 ```bash
-# 查看当前远程 URL
 git remote -v
-
-# 如果显示的是 gitclone.com，修改为 GitHub
 git remote set-url origin https://github.com/lpz7777777/OpenClaw_Files.git
-
-# 推送
 git push origin main
 ```
-
-### 验证推送成功
-
-访问仓库页面确认最新提交：
-```
-https://github.com/lpz7777777/OpenClaw_Files
-```
-
----
-
-## 📅 2026-03-19 补充
-
-新增了一个"百度网盘同步"面板，位置在中间工作区下方：
-
-- ☁️ 可以把当前已选文件夹直接上传到百度网盘
-- ⏰ 可以填写"每日同步时间"和时区，通过 `openclaw cron add` 创建定时同步任务
-- ❌ 可以在应用内直接取消当前应用创建的定时同步任务
-- 📊 顶部栏会显示 OpenClaw Gateway 连接状态和当前由本应用创建的同步任务概览
-- 📱 百度网盘区域会显示百度网盘登录状态以及当前由本应用创建的同步任务列表
-
-**实现说明：**
-
-- 📍 网盘目标路径使用相对 `/apps/bdpan/` 的相对路径
-- 🔧 `bdpan` 在 Windows 上不要求出现在当前 shell 的 `PATH` 中，后端会自动定位已安装的 CLI
-- 🤖 定时任务使用用户默认的 OpenClaw CLI 环境创建，避免项目私有 `.openclaw-state` 带来的 `pairing required`
-- ⚡ 立即上传直接调用本机 `bdpan upload`，避免大文件夹通过 OpenClaw 聊天链路时中途停住
-- 🕐 定时同步仍通过 `openclaw cron add` 创建，并让 OpenClaw 在计划时间调用已安装的 `bdpan-storage` skill
-- 🔄 云状态默认只在应用启动时刷新；打开文件夹不会重新拉取 Gateway / 定时任务 / 百度网盘登录状态
-- ✅ 在完成一次有效状态刷新前，百度网盘区域只显示中性提示，不会提前显示 `bdpan 未安装`、`定时调度未启用` 等结论性文案
-
-**本轮修复：**
-
-- 🔄 修复了 `rename_folder` 合并到已存在目录时，后续仍引用旧路径的 `move` / `delete` 操作被误判失败的问题
-- ✅ 执行器现在会把"源路径已不存在但目标已经到位"的情况视为已生效，避免重复执行时出现 `Source path does not exist`
-- 📁 对目录合并增加了递归合并能力，降低 `Target folder already exists and contains conflicting items` 这类报错的出现概率
-- ☁️ 百度网盘立即上传链路已从 OpenClaw 对话调用切换为本机 `bdpan upload`，用来规避大文件夹上传到约百余个文件后停住的问题
-
-**验证情况：**
-
-- ✅ 已对一组真实等价场景复现 `7-预汇报 -> 07-预汇报` + 后续文件上移 + 删除包装目录，4 条操作全部成功
-- ✅ 已实际调用 `bdpan upload` 完成小文件夹上传，并正确返回网盘路径与查看链接
 
 ---
 
@@ -554,6 +554,6 @@ https://github.com/lpz7777777/OpenClaw_Files
 
 **Made with ❤️ by OpenClaw Files Team**
 
-[🔝 返回顶部](#openclaw-files)
+[⬆️ 返回顶部](#openclaw-files)
 
 </div>

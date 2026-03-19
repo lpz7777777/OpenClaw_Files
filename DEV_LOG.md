@@ -1348,3 +1348,64 @@ npm run build
 - [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
 - [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
 - [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+---
+
+## 二十一、2026-03-19 补充：默认 mac 主题、资源图标与 README 重构
+
+本轮补了三块偏展示层和交互体验的工作：
+
+### 1. 应用启动时固定进入 mac 主题
+
+- 默认主题从 `workspace` 调整为 `mac`
+- 启动初始化时直接应用 `mac`，不再沿用本地缓存的旧主题
+- 这样可以保证每次打开应用时都以统一的 mac 风格进入
+
+### 2. 资源管理器文件图标切换到 assets/icons
+
+- 原先资源树主要依赖文本徽标和颜色区分
+- 现在对常见办公文件类型改为优先使用 `assets/icons` 下的图片资源
+- 当前已接入：
+  - `word_icon.png`
+  - `PDF_icon.png`
+  - `excel_icon.png`
+  - `ppt_icon.png`
+  - `zip_icon.png`
+  - `wechat_icon.png`
+- 同时，顶部“微信文件清理”按钮也加入了微信图标
+
+### 3. README 重新整理
+
+README 本轮改成更接近项目主页的结构，重点优化了截图展示区：
+
+- 使用 `screenshots/main-interface.png` 作为主界面大图
+- 将 5 张不同主题截图改成小图并列展示：
+  - `theme-switcher_wushan.png`
+  - `theme-switcher_beian.png`
+  - `theme-switcher_hupo.png`
+  - `theme-switcher_yuhou.png`
+  - `theme-switcher_shanhu.png`
+- 新增“功能截图预留”区域，预留后续补充：
+  - 微信文件清理
+  - 百度网盘同步
+  - 整理执行
+  - 回滚与去重
+- README 还同步补充了：
+  - 微信文件清理能力说明
+  - 默认 mac 主题说明
+  - 资源图标升级说明
+  - 更清晰的安装、配置、启动与使用流程
+
+### 4. 本轮涉及文件
+
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 5. 本轮验证
+
+- `node --check renderer.js`
+- `python -m py_compile backend/file_analyzer.py backend/server.py`
+- README 截图路径与现有 `screenshots/` 文件名逐一对齐检查
