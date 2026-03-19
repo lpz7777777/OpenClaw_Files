@@ -186,3 +186,57 @@ python discover_gateway.py
 ## 许可证
 
 MIT
+
+## 附录：Git 推送方法
+
+### 问题背景
+
+如果你的全局 Git 配置中有类似以下配置：
+
+```bash
+url.https://gitclone.com/github.com/.insteadof=ssh://git@github.com/
+url.https://gitclone.com/github.com/.insteadof=git@github.com:
+url.https://gitclone.com/github.com/.insteadof=https://github.com/
+```
+
+这会导致所有 GitHub 请求被重写到 `gitclone.com`，当该服务不可用时会返回 502 错误。
+
+### 解决方案
+
+**方案一：临时移除全局重写规则（推荐）**
+
+```bash
+# 移除 gitclone 重写规则
+git config --global --remove-section url."https://gitclone.com/github.com/"
+
+# 然后正常推送
+git add .
+git commit -m "提交信息"
+git push origin main
+```
+
+**方案二：使用 -c 参数临时覆盖**
+
+```bash
+git -c url."https://github.com/".insteadof= push origin main
+```
+
+**方案三：直接修改远程 URL**
+
+```bash
+# 查看当前远程 URL
+git remote -v
+
+# 如果显示的是 gitclone.com，修改为 GitHub
+git remote set-url origin https://github.com/lpz7777777/OpenClaw_Files.git
+
+# 推送
+git push origin main
+```
+
+### 验证推送成功
+
+访问仓库页面确认最新提交：
+```
+https://github.com/lpz7777777/OpenClaw_Files
+```

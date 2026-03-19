@@ -92,7 +92,8 @@ confirmBtn.addEventListener("click", async () => {
 
     await executeOperations(
         pending.map(({ index }) => index),
-        `正在执行剩余的 ${pending.length} 条操作，请稍候...`
+        `正在执行剩余的 ${pending.length} 条操作，请稍候...`,
+        { writeReadme: true }
     );
 });
 
@@ -1070,13 +1071,23 @@ async function executeSingleOperation(index) {
     await executeOperations([index], "正在执行当前确认的操作...");
 }
 
-async function executeOperations(indexes, loadingMessage) {
+async function executeOperations(indexes, loadingMessage, options = {}) {
     const operations = indexes
-        .map((index) => ({
-            index,
-            operation: state.currentPlan?.operations?.[index],
-        }))
-        .filter(({ operation }) => operation);
+        .map((index) => {
+            const operation = state.currentPlan?.operations?.[index];
+            if (!operation) {
+                return null;
+            }
+
+            return {
+                index,
+                operation: {
+                    ...operation,
+                    client_index: index,
+                },
+            };
+        })
+        .filter(Boolean);
 
     if (operations.length === 0) {
         return;
@@ -1091,20 +1102,79 @@ async function executeOperations(indexes, loadingMessage) {
         const response = await axios.post(`${API_BASE}/execute`, {
             folder_path: state.currentFolderPath,
             operations: operations.map(({ operation }) => operation),
+            write_readme: Boolean(options.writeReadme),
         });
 
         if (response.data.success) {
-            updatePendingOperationsAfterExecution(operations.map(({ operation }) => operation));
-            operations.forEach(({ index }) => state.completedOperationIndexes.add(index));
-            state.lastResult = {
-                type: "success",
-                message: `已执行 ${operations.length} 条操作，剩余 ${getPendingOperations().length} 条待确认。`,
-                at: Date.now(),
-            };
-            state.canRollback = true;
-            setAnalysisStatus("success", "操作已执行，目录树已同步刷新。");
-            await loadFolderTree(state.currentFolderPath, true);
-            openOverviewTab();
+            const resultItems = Array.isArray(response.data.results) ? response.data.results : [];
+            const succeededIndexes = new Set(
+                resultItems
+                    .filter((item) => item?.success)
+                    .map((item) => item?.operation?.client_index)
+                    .filter((value) => Number.isInteger(value))
+            );
+            const successfulOperations = operations
+                .filter(({ index }) => succeededIndexes.has(index))
+                .map(({ operation }) => operation);
+            const failedResults = resultItems.filter((item) => !item?.success);
+
+            updatePendingOperationsAfterExecution(successfulOperations);
+            succeededIndexes.forEach((index) => state.completedOperationIndexes.add(index));
+
+            const remainingCount = getPendingOperations().length;
+            const readmeGenerated = Boolean(response.data.readme_generated);
+            const readmeError = response.data.readme_error ? String(response.data.readme_error) : "";
+            const successCount = successfulOperations.length;
+            const failureCount = failedResults.length;
+
+            if (successCount > 0) {
+                state.canRollback = true;
+                await loadFolderTree(state.currentFolderPath, true);
+                openOverviewTab();
+            }
+
+            if (failureCount === 0) {
+                const baseMessage = options.writeReadme
+                    ? `已完成 ${successCount} 条操作，当前整理结果已落盘。`
+                    : `已执行 ${successCount} 条操作，剩余 ${remainingCount} 条待确认。`;
+                const readmeMessage = readmeGenerated
+                    ? " 已在打开文件夹的根目录写入 README.md。"
+                    : readmeError
+                    ? ` README.md 写入失败：${readmeError}`
+                    : "";
+
+                state.lastResult = {
+                    type: readmeError ? "error" : "success",
+                    message: `${baseMessage}${readmeMessage}`.trim(),
+                    at: Date.now(),
+                };
+                setAnalysisStatus(
+                    readmeError ? "error" : "success",
+                    readmeGenerated
+                        ? "全部操作已执行，README 已写入根目录。"
+                        : readmeError
+                        ? `操作已执行，但 README 写入失败：${readmeError}`
+                        : "操作已执行，目录树已同步刷新。"
+                );
+            } else {
+                const failureSummary = failedResults
+                    .slice(0, 2)
+                    .map((item) => item.error)
+                    .filter(Boolean)
+                    .join("；");
+
+                state.lastResult = {
+                    type: "error",
+                    message:
+                        `本轮共成功执行 ${successCount} 条，失败 ${failureCount} 条，剩余 ${remainingCount} 条待确认。` +
+                        (failureSummary ? ` 失败原因：${failureSummary}` : ""),
+                    at: Date.now(),
+                };
+                setAnalysisStatus(
+                    "error",
+                    `部分操作执行失败：成功 ${successCount} 条，失败 ${failureCount} 条。`
+                );
+            }
         } else {
             state.lastResult = {
                 type: "error",

@@ -66,7 +66,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
             folder_path = data.get("folder_path")
             operations = data.get("operations")
-            result = analyzer.execute_plan(folder_path, operations)
+            write_readme = bool(data.get("write_readme"))
+            result = analyzer.execute_plan(
+                folder_path,
+                operations,
+                write_readme=write_readme,
+            )
             if result.get("success"):
                 previous_backup = RequestHandler.current_backup or []
                 current_backup = result.get("backup_info") or []

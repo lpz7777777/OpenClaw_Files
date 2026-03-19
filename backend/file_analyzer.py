@@ -4,6 +4,7 @@ import re
 import shutil
 import tempfile
 from collections import Counter
+from datetime import datetime
 
 import anthropic
 from dotenv import load_dotenv
@@ -19,6 +20,48 @@ MAX_TOTAL_FILES = 1200
 MAX_SUBFOLDERS_PER_FOLDER = 100
 MAX_SAMPLE_FILES_PER_FOLDER = 12
 MAX_SAMPLE_SUBFOLDERS_PER_FOLDER = 12
+ANALYSIS_PROMPT_PROFILES = [
+    {
+        "name": "full",
+        "max_prompt_chars": 22000,
+        "folder_limit": 120,
+        "file_limit": 280,
+        "sample_files": 4,
+        "sample_subfolders": 4,
+        "min_folder_limit": 48,
+        "min_file_limit": 96,
+    },
+    {
+        "name": "compact",
+        "max_prompt_chars": 16000,
+        "folder_limit": 80,
+        "file_limit": 180,
+        "sample_files": 2,
+        "sample_subfolders": 2,
+        "min_folder_limit": 32,
+        "min_file_limit": 72,
+    },
+    {
+        "name": "small",
+        "max_prompt_chars": 12000,
+        "folder_limit": 48,
+        "file_limit": 110,
+        "sample_files": 1,
+        "sample_subfolders": 1,
+        "min_folder_limit": 20,
+        "min_file_limit": 48,
+    },
+    {
+        "name": "tiny",
+        "max_prompt_chars": 9000,
+        "folder_limit": 28,
+        "file_limit": 70,
+        "sample_files": 0,
+        "sample_subfolders": 0,
+        "min_folder_limit": 14,
+        "min_file_limit": 32,
+    },
+]
 
 
 class FileAnalyzer:
@@ -55,82 +98,267 @@ class FileAnalyzer:
 
     def analyze_folder(self, folder_path):
         """Analyze a folder and generate a cleanup plan."""
+        last_error = None
         try:
             structure = self._get_folder_structure(folder_path)
-            prompt = self._build_analysis_prompt(folder_path, structure)
-            prompt = self._augment_analysis_prompt(prompt, structure)
-            response_text = self._generate_text(prompt)
-            plan = self._parse_plan_response(response_text)
-            plan = self._enrich_plan_with_heuristics(plan, structure)
-            return {
-                "success": True,
-                "plan": plan,
-                "folder_structure": structure,
-            }
+
+            for index, prompt_profile in enumerate(ANALYSIS_PROMPT_PROFILES):
+                try:
+                    prompt = self._build_analysis_prompt(
+                        folder_path,
+                        structure,
+                        prompt_profile=prompt_profile,
+                    )
+                    response_text = self._generate_text(prompt)
+                    plan = self._parse_plan_response(response_text)
+                    plan = self._enrich_plan_with_heuristics(plan, structure)
+                    return {
+                        "success": True,
+                        "plan": plan,
+                        "folder_structure": structure,
+                    }
+                except Exception as exc:
+                    last_error = exc
+                    if (
+                        index < len(ANALYSIS_PROMPT_PROFILES) - 1
+                        and self._looks_like_context_overflow(exc)
+                    ):
+                        print(
+                            "[FileAnalyzer] Prompt overflow on profile "
+                            f"{prompt_profile['name']}, retrying with a smaller prompt."
+                        )
+                        continue
+                    raise
         except Exception as exc:
             return {
                 "success": False,
-                "error": str(exc),
+                "error": str(last_error or exc),
             }
 
-    def _build_analysis_prompt(self, folder_path, structure):
-        folder_count = len(structure.get("folder_index", []))
-        file_count = len(structure.get("file_index", []))
-        required_summary_points = min(max(folder_count, 4), 12)
-        prompt_payload = {
-            "path": structure.get("path"),
-            "stats": structure.get("stats"),
-            "scan_limits": structure.get("scan_limits"),
-            "folder_index": structure.get("folder_index"),
-            "file_type_overview": structure.get("file_type_overview"),
-            "file_index": structure.get("file_index"),
-        }
+    def _build_analysis_prompt(self, folder_path, structure, prompt_profile=None):
+        prompt_profile = prompt_profile or ANALYSIS_PROMPT_PROFILES[0]
+        prompt_payload = self._build_prompt_payload(structure, prompt_profile)
+        folder_count = prompt_payload.get("prompt_view", {}).get("folder_index_included", 0)
+        file_count = prompt_payload.get("prompt_view", {}).get("file_index_included", 0)
+        required_summary_points = min(max(folder_count, 4), 10)
+        payload_json = json.dumps(
+            prompt_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
-        return f"""请分析下面这个文件夹，并基于“各个子文件的文件名、文件类型、所在路径”重新规划整个目录结构。
+        return f"""请基于下面的目录摘要生成一个稳妥的文件整理计划。
 
 目标文件夹：{folder_path}
 
-你会看到：
-1. 各级目录统计信息
-2. 扁平化的 file_index，里面列出了扫描到的各个子文件
-3. 每个文件的相对路径、文件名、扩展名、文件类型和语义分组
-4. 文件类型概览
+说明：
+1. 重点先看 file_index，再决定目录应该如何重组；不要只根据文件夹名猜测。
+2. file_index 中每项使用紧凑字段：path=相对路径，ext=扩展名，type=类型分组，group=语义分组。
+3. folder_index 中每项包含 path、file_count、subfolder_count、top_extensions，以及少量 sample_files/sample_subfolders。
+4. 如果 prompt_view 显示 sampled 或 omitted，说明这里只提供了代表性样本。你可以结合样本和统计做判断，但只能输出有把握的建议。
 
-请严格遵守以下要求：
-1. 不要只看文件夹名字，必须逐个审阅 file_index 里的子文件条目，并依据文件名、扩展名、文件类型、语义分组来判断它们应该归入哪类目录。
-2. 你的目标不是局部微调，而是重新规划整个目录的目标结构。先思考“什么样的目录结构更清晰”，再输出对应的 create_folder、rename_folder、move、rename、delete 操作。
-3. 优先把“同类文件归并”“流程文档/模板/名单/图片/压缩包分区”“编号与命名统一”“根目录减负”作为重规划重点。
-4. 如果某个子目录结构已经合理，也要在摘要中明确指出“保持不动”的判断原因。
-5. 如果某类文件应该统一进入一个新目录，请直接使用 create_folder + move 的组合来表达。
-6. operations 里的 source 和 target 必须是相对于目标文件夹的路径，并统一使用 / 作为路径分隔符，不要使用 Windows 反斜杠。
-7. 只返回你有把握的建议，不要虚构不存在的路径。
-8. 当前扫描到的文件数不少于 {file_count} 个，请优先基于 file_index 做文件级分析，而不是只根据目录层级猜测。
-9. summary_points 必须是一条一条的结构化摘要，每一条都尽量点名具体目录路径，并说明该路径中的文件为什么应该这样重组。
-10. 如果可分析目录不少于 {required_summary_points} 个，请尽量输出至少 {required_summary_points} 条 summary_points。
-11. 输出必须是严格合法的 JSON：只能使用双引号，不能带注释，不能带多余说明文字，不能省略逗号。
-12. reason、summary、summary_points 中如果要出现引号，请进行 JSON 转义。
+请严格遵守：
+1. 目标不是局部微调，而是重新规划更清晰的目标结构。
+2. 优先考虑同类文件归并、流程文档/模板/名单/图片/压缩包分区、编号命名统一、根目录减负。
+3. 合理的子目录可以保持不动，但要在 summary_points 中说明理由。
+4. 需要新目录时，用 create_folder + move 表达。
+5. operations 的 source 和 target 必须是相对路径，统一使用 /。
+6. 只输出有把握的建议，不要虚构不存在的路径。
+7. 当前用于分析的代表性文件不少于 {file_count} 个，请优先基于 file_index 做文件级分析。
+8. 尽量输出至少 {required_summary_points} 条 summary_points。
+9. 输出必须是严格合法 JSON，只能使用双引号，不能附带解释文字或 Markdown。
 
-用于分析的数据：
-{json.dumps(prompt_payload, ensure_ascii=False, indent=2)}
+数据：
+{payload_json}
 
-请只返回 JSON，格式如下：
-{{
-  "summary": "整体整理思路的总述",
-  "summary_points": [
-    "第 1 条结构化摘要",
-    "第 2 条结构化摘要"
-  ],
-  "categories": ["建议分类1", "建议分类2", "建议分类3"],
-  "operations": [
-    {{
-      "type": "move|rename|rename_folder|create_folder|delete",
-      "source": "relative/path",
-      "target": "relative/path",
-      "reason": "说明为什么这样整理，并尽量点名对应子目录或文件集合"
-    }}
-  ]
-}}
+只返回 JSON，格式如下：
+{{"summary":"整体整理思路","summary_points":["摘要1","摘要2"],"categories":["分类1","分类2"],"operations":[{{"type":"move|rename|rename_folder|create_folder|delete","source":"relative/path","target":"relative/path","reason":"说明原因"}}]}}
 """
+
+    def _build_prompt_payload(self, structure, prompt_profile):
+        folder_entries = structure.get("folder_index", [])
+        file_entries = structure.get("file_index", [])
+
+        folder_limit = min(
+            max(int(prompt_profile.get("folder_limit", 0)), 0),
+            len(folder_entries),
+        )
+        file_limit = min(
+            max(int(prompt_profile.get("file_limit", 0)), 0),
+            len(file_entries),
+        )
+        sample_files = max(int(prompt_profile.get("sample_files", 0)), 0)
+        sample_subfolders = max(int(prompt_profile.get("sample_subfolders", 0)), 0)
+        min_folder_limit = min(
+            folder_limit,
+            max(int(prompt_profile.get("min_folder_limit", 0)), 0),
+        )
+        min_file_limit = min(
+            file_limit,
+            max(int(prompt_profile.get("min_file_limit", 0)), 0),
+        )
+
+        while True:
+            selected_folders = self._select_folder_index_for_prompt(
+                folder_entries,
+                folder_limit,
+                sample_files,
+                sample_subfolders,
+            )
+            selected_files = self._select_file_index_for_prompt(file_entries, file_limit)
+            payload = {
+                "path": structure.get("path"),
+                "stats": structure.get("stats"),
+                "prompt_view": {
+                    "profile": prompt_profile.get("name"),
+                    "folder_index_total": len(folder_entries),
+                    "folder_index_included": len(selected_folders),
+                    "folder_index_omitted": max(len(folder_entries) - len(selected_folders), 0),
+                    "file_index_total": len(file_entries),
+                    "file_index_included": len(selected_files),
+                    "file_index_omitted": max(len(file_entries) - len(selected_files), 0),
+                    "sampled": (
+                        len(selected_folders) < len(folder_entries)
+                        or len(selected_files) < len(file_entries)
+                    ),
+                },
+                "folder_index": selected_folders,
+                "file_type_overview": self._compact_file_type_overview(
+                    structure.get("file_type_overview", {})
+                ),
+                "file_index": selected_files,
+            }
+
+            payload_text = json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            if len(payload_text) <= prompt_profile.get("max_prompt_chars", 0):
+                return payload
+
+            can_reduce_folders = folder_limit > min_folder_limit
+            can_reduce_files = file_limit > min_file_limit
+            can_reduce_samples = sample_files > 0 or sample_subfolders > 0
+            if not any([can_reduce_folders, can_reduce_files, can_reduce_samples]):
+                return payload
+
+            if can_reduce_files:
+                file_limit = max(min_file_limit, int(file_limit * 0.75))
+            if can_reduce_folders:
+                folder_limit = max(min_folder_limit, int(folder_limit * 0.75))
+            if can_reduce_samples:
+                sample_files = max(sample_files - 1, 0)
+                sample_subfolders = max(sample_subfolders - 1, 0)
+
+    def _select_folder_index_for_prompt(
+        self,
+        folder_entries,
+        limit,
+        sample_files,
+        sample_subfolders,
+    ):
+        sorted_entries = sorted(
+            folder_entries,
+            key=lambda entry: (
+                self._path_depth(entry.get("path", "")),
+                str(entry.get("path", "")),
+            ),
+        )
+        selected_entries = []
+        for entry in sorted_entries[:limit]:
+            compact = {
+                "path": entry.get("path"),
+                "file_count": entry.get("file_count", 0),
+                "subfolder_count": entry.get("subfolder_count", 0),
+                "top_extensions": self._compact_extension_pairs(entry.get("top_extensions", []), 4),
+            }
+            if sample_files > 0:
+                compact["sample_files"] = list(entry.get("sample_files", [])[:sample_files])
+            if sample_subfolders > 0:
+                compact["sample_subfolders"] = list(
+                    entry.get("sample_subfolders", [])[:sample_subfolders]
+                )
+            selected_entries.append(compact)
+
+        return selected_entries
+
+    def _select_file_index_for_prompt(self, file_entries, limit):
+        if limit <= 0:
+            return []
+
+        sorted_entries = sorted(
+            file_entries,
+            key=lambda entry: (
+                self._path_depth(entry.get("relative_path", "")),
+                str(entry.get("parent_path", "")),
+                str(entry.get("relative_path", "")),
+            ),
+        )
+        buckets = {}
+        bucket_order = []
+
+        for entry in sorted_entries:
+            bucket_key = str(entry.get("parent_path", "."))
+            if bucket_key not in buckets:
+                buckets[bucket_key] = []
+                bucket_order.append(bucket_key)
+            buckets[bucket_key].append(entry)
+
+        selected = []
+        while len(selected) < limit and bucket_order:
+            next_bucket_order = []
+            for bucket_key in bucket_order:
+                bucket = buckets.get(bucket_key, [])
+                if not bucket:
+                    continue
+                selected.append(bucket.pop(0))
+                if len(selected) >= limit:
+                    break
+                if bucket:
+                    next_bucket_order.append(bucket_key)
+            bucket_order = next_bucket_order
+
+        return [self._compact_file_index_entry(entry) for entry in selected]
+
+    def _compact_file_index_entry(self, entry):
+        return {
+            "path": entry.get("relative_path"),
+            "ext": entry.get("extension"),
+            "type": entry.get("type_group"),
+            "group": entry.get("semantic_group"),
+        }
+
+    def _compact_file_type_overview(self, overview):
+        return {
+            "top_extensions": self._compact_extension_pairs(
+                overview.get("top_extensions", []),
+                10,
+            ),
+            "type_groups": self._compact_extension_pairs(
+                overview.get("type_groups", []),
+                10,
+            ),
+            "semantic_groups": self._compact_extension_pairs(
+                overview.get("semantic_groups", []),
+                10,
+            ),
+        }
+
+    def _compact_extension_pairs(self, pairs, limit):
+        compact = []
+        for name, count in list(pairs or [])[:limit]:
+            compact.append(f"{name}:{count}")
+        return compact
+
+    def _looks_like_context_overflow(self, exc):
+        message = str(exc).lower()
+        return (
+            "context overflow" in message
+            or "prompt too large" in message
+            or "context length" in message
+            or "maximum context" in message
+        )
 
     def _augment_analysis_prompt(self, prompt: str, structure: dict) -> str:
         folder_count = len(structure.get("folder_index", []))
@@ -335,6 +563,9 @@ Correct JSON examples:
             if op_type not in {"delete", "create_folder"} and (not target or target == "."):
                 continue
 
+            if op_type in {"move", "rename", "rename_folder"} and source == target:
+                continue
+
             if op_type == "delete":
                 target = ""
 
@@ -372,6 +603,65 @@ Correct JSON examples:
         normalized = re.sub(r"^\./+", "", normalized)
         normalized = normalized.rstrip("/")
         return normalized
+
+    def _normalize_name_for_path_lookup(self, name: str) -> str:
+        normalized = str(name or "").strip().lower()
+        normalized = normalized.replace("（", "(").replace("）", ")")
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    def _resolve_existing_path_with_fuzzy_segments(self, folder_path, relative_path):
+        normalized_relative_path = self._normalize_relative_path(relative_path)
+        if not normalized_relative_path or normalized_relative_path == ".":
+            return None
+
+        current_path = os.path.realpath(folder_path)
+        folder_real = os.path.realpath(folder_path)
+        segments = [segment for segment in normalized_relative_path.split("/") if segment]
+
+        for segment in segments:
+            exact_candidate = os.path.join(current_path, segment)
+            if os.path.exists(exact_candidate):
+                current_path = exact_candidate
+                continue
+
+            if not os.path.isdir(current_path):
+                return None
+
+            try:
+                entries = os.listdir(current_path)
+            except OSError:
+                return None
+
+            normalized_segment = self._normalize_name_for_path_lookup(segment)
+            matches = [
+                os.path.join(current_path, entry_name)
+                for entry_name in entries
+                if self._normalize_name_for_path_lookup(entry_name) == normalized_segment
+            ]
+            if not matches and "." in segment and segment == segments[-1]:
+                requested_stem, _ = os.path.splitext(segment)
+                normalized_requested_stem = self._normalize_name_for_path_lookup(
+                    requested_stem
+                )
+                matches = [
+                    os.path.join(current_path, entry_name)
+                    for entry_name in entries
+                    if self._normalize_name_for_path_lookup(
+                        os.path.splitext(entry_name)[0]
+                    )
+                    == normalized_requested_stem
+                ]
+            if len(matches) != 1:
+                return None
+
+            current_path = matches[0]
+
+        current_real = os.path.realpath(current_path)
+        if os.path.commonpath([folder_real, current_real]) != folder_real:
+            return None
+
+        return current_path if os.path.exists(current_path) else None
 
     def _merge_summary_points_with_operations(self, summary_points, operations):
         merged = []
@@ -534,6 +824,23 @@ Correct JSON examples:
             return target_prefix
         if normalized_path.startswith(f"{source_prefix}/"):
             return f"{target_prefix}{normalized_path[len(source_prefix):]}"
+        return normalized_path
+
+    def _rewrite_relative_path_with_inverse_rename(
+        self,
+        relative_path: str,
+        rename_operation: dict,
+    ) -> str:
+        normalized_path = self._normalize_relative_path(relative_path)
+        source_prefix = self._normalize_relative_path(rename_operation.get("source", ""))
+        target_prefix = self._normalize_relative_path(rename_operation.get("target", ""))
+
+        if not normalized_path or not source_prefix or not target_prefix:
+            return normalized_path
+        if normalized_path == target_prefix:
+            return source_prefix
+        if normalized_path.startswith(f"{target_prefix}/"):
+            return f"{source_prefix}{normalized_path[len(target_prefix):]}"
         return normalized_path
 
     def _iter_directory_nodes(self, root_node):
@@ -1142,11 +1449,11 @@ Correct JSON examples:
             target_depth = self._path_depth(operation.get("target", ""))
             depth = max(source_depth, target_depth)
 
-            if op_type == "create_folder":
-                return (0, target_depth)
-            if op_type in {"move", "rename"}:
-                return (1, -depth)
             if op_type == "rename_folder":
+                return (0, -depth)
+            if op_type == "create_folder":
+                return (1, target_depth)
+            if op_type in {"move", "rename"}:
                 return (2, -depth)
             if op_type == "delete":
                 return (3, -depth)
@@ -1154,12 +1461,214 @@ Correct JSON examples:
 
         return sorted(operations or [], key=sort_key)
 
-    def execute_plan(self, folder_path, operations):
+    def _format_size_for_readme(self, value):
+        size = float(value or 0)
+        units = ["B", "KB", "MB", "GB", "TB"]
+        unit_index = 0
+
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+
+        if unit_index == 0:
+            return f"{int(size)} {units[unit_index]}"
+        if size >= 10:
+            return f"{size:.0f} {units[unit_index]}"
+        return f"{size:.1f} {units[unit_index]}"
+
+    def _format_extensions_for_readme(self, top_extensions):
+        parts = []
+        for extension, count in top_extensions[:4]:
+            label = extension if extension != "[no_ext]" else "无扩展名"
+            parts.append(f"`{label}` x {count}")
+        return "、".join(parts) if parts else "无明显类型分布"
+
+    def _build_top_level_section_for_readme(self, structure):
+        root = structure.get("tree", {})
+        lines = []
+
+        directories = root.get("children", []) or []
+        for node in directories:
+            summary = node.get("summary", {})
+            lines.append(
+                "- "
+                + f"`{node.get('name', '未命名目录')}/`："
+                + f"{summary.get('file_count', len(node.get('files', [])))} 个文件，"
+                + f"{summary.get('subfolder_count', len(node.get('children', [])))} 个子目录，"
+                + f"主要类型为 {self._format_extensions_for_readme(summary.get('top_extensions', []))}。"
+            )
+
+        root_files = root.get("files", []) or []
+        for file_info in root_files:
+            lines.append(
+                "- "
+                + f"`{file_info.get('name', '未命名文件')}`："
+                + f"根目录文件，大小约 {self._format_size_for_readme(file_info.get('size', 0))}。"
+            )
+
+        if not lines:
+            lines.append("- 根目录当前没有可描述的子目录或文件。")
+
+        return lines
+
+    def _render_tree_lines_for_readme(self, root_node, max_depth=3, max_lines=220):
+        root_name = root_node.get("name") or "root"
+        lines = [f"{root_name}/"]
+        truncated = False
+
+        def walk_directory(node, prefix, depth):
+            nonlocal truncated
+            if truncated:
+                return
+
+            entries = []
+            for child in node.get("children", []) or []:
+                entries.append(("directory", child.get("name", "").lower(), child))
+            for file_info in node.get("files", []) or []:
+                entries.append(("file", file_info.get("name", "").lower(), file_info))
+
+            entries.sort(key=lambda item: (0 if item[0] == "directory" else 1, item[1]))
+
+            for index, (entry_type, _, entry) in enumerate(entries):
+                if len(lines) >= max_lines:
+                    truncated = True
+                    return
+
+                is_last = index == len(entries) - 1
+                connector = "└── " if is_last else "├── "
+                next_prefix = prefix + ("    " if is_last else "│   ")
+
+                if entry_type == "directory":
+                    lines.append(f"{prefix}{connector}{entry.get('name', '未命名目录')}/")
+                    child_count = len(entry.get("children", []) or []) + len(
+                        entry.get("files", []) or []
+                    )
+                    if depth >= max_depth:
+                        if child_count > 0 and len(lines) < max_lines:
+                            lines.append(f"{next_prefix}└── ... ({child_count} 个子项)")
+                        continue
+                    walk_directory(entry, next_prefix, depth + 1)
+                    continue
+
+                lines.append(f"{prefix}{connector}{entry.get('name', '未命名文件')}")
+
+        walk_directory(root_node, "", 1)
+        if truncated:
+            lines.append("... (目录树过长，已截断显示)")
+
+        return lines
+
+    def _build_structure_readme(self, folder_path, structure, executed_results):
+        folder_name = os.path.basename(os.path.abspath(folder_path)) or folder_path
+        stats = structure.get("stats", {})
+        succeeded_results = [
+            item for item in (executed_results or []) if item.get("success")
+        ]
+        operation_counter = Counter(
+            str(item.get("operation", {}).get("type", "")).strip().lower()
+            for item in succeeded_results
+            if item.get("operation")
+        )
+        operation_lines = []
+        label_map = {
+            "move": "移动",
+            "rename": "重命名文件",
+            "rename_folder": "重命名文件夹",
+            "create_folder": "创建文件夹",
+            "delete": "删除",
+        }
+
+        for op_type in ["move", "rename", "rename_folder", "create_folder", "delete"]:
+            count = operation_counter.get(op_type, 0)
+            if count > 0:
+                operation_lines.append(f"- {label_map[op_type]}：{count} 项")
+
+        if not operation_lines:
+            operation_lines.append("- 本次没有记录到已执行的整理操作。")
+
+        top_level_lines = self._build_top_level_section_for_readme(structure)
+        tree_lines = self._render_tree_lines_for_readme(structure.get("tree", {}))
+        generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        truncated_note = ""
+        if stats.get("truncated"):
+            truncated_note = (
+                "\n> 说明：目录扫描已达到当前应用的体量限制，下面的结构说明可能是部分视图。"
+            )
+
+        return f"""# {folder_name} 文件夹结构说明
+
+本文件由 OpenClaw Files 自动生成，用于说明“确认全部”执行完成后的当前目录结构。
+
+## 当前概览
+
+- 生成时间：{generated_at}
+- 根目录：`{folder_path}`
+- 子目录数量：{stats.get("folders", 0)}
+- 文件数量：{stats.get("files", 0)}
+- 总体积：{self._format_size_for_readme(stats.get("total_size", 0))}
+- 扫描最大深度：{stats.get("max_depth_scanned", 0)}
+
+## 本次整理结果
+
+{os.linesep.join(operation_lines)}
+
+## 一级结构说明
+
+{os.linesep.join(top_level_lines)}
+
+## 目录树概览
+
+```text
+{os.linesep.join(tree_lines)}
+```
+{truncated_note}
+"""
+
+    def _write_structure_readme(self, folder_path, executed_results):
+        readme_path = os.path.join(folder_path, "README.md")
+        backup_root = ""
+        backup_path = ""
+        existed_before = os.path.exists(readme_path)
+
+        try:
+            if existed_before:
+                backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
+                backup_root = tempfile.mkdtemp(
+                    prefix=".openclaw-readme-",
+                    dir=backup_parent_dir,
+                )
+                backup_path = os.path.join(backup_root, "README.md")
+                shutil.copy2(readme_path, backup_path)
+
+            structure = self._get_folder_structure(folder_path)
+            readme_content = self._build_structure_readme(
+                folder_path, structure, executed_results
+            )
+            with open(readme_path, "w", encoding="utf-8", newline="\n") as readme_file:
+                readme_file.write(readme_content)
+        except Exception:
+            if backup_root:
+                shutil.rmtree(backup_root, ignore_errors=True)
+            raise
+
+        return {
+            "readme_path": readme_path,
+            "backup_item": {
+                "type": "write_readme",
+                "source": backup_path,
+                "target": readme_path,
+                "temp_root": backup_root,
+                "existed_before": existed_before,
+            },
+        }
+
+    def execute_plan(self, folder_path, operations, write_readme=False):
         """Execute file and folder operations."""
         results = []
         backup_info = []
         delete_backup_root = None
-        applied_renames = []
+        applied_path_rewrites = []
+        failed_renames = []
 
         try:
             for operation in self._sort_operations_for_execution(operations):
@@ -1167,13 +1676,32 @@ Correct JSON examples:
                 source_relative_path = operation.get("source", "")
                 target_relative_path = operation.get("target", "")
 
-                for rename_operation in applied_renames:
+                for path_rewrite in applied_path_rewrites:
                     source_relative_path = self._rewrite_relative_path_with_rename(
-                        source_relative_path, rename_operation
+                        source_relative_path, path_rewrite
                     )
                     target_relative_path = self._rewrite_relative_path_with_rename(
-                        target_relative_path, rename_operation
+                        target_relative_path, path_rewrite
                     )
+
+                normalized_source_relative_path = self._normalize_relative_path(
+                    source_relative_path
+                )
+                normalized_target_relative_path = self._normalize_relative_path(
+                    target_relative_path
+                )
+                if (
+                    op_type in {"move", "rename", "rename_folder"}
+                    and normalized_source_relative_path
+                    and normalized_source_relative_path == normalized_target_relative_path
+                ):
+                    results.append(
+                        {
+                            "success": True,
+                            "operation": operation,
+                        }
+                    )
+                    continue
 
                 try:
                     source = (
@@ -1199,6 +1727,38 @@ Correct JSON examples:
                     continue
 
                 if op_type != "create_folder" and not os.path.exists(source):
+                    alternate_source_relative_path = source_relative_path
+                    for failed_rename in reversed(failed_renames):
+                        alternate_candidate = self._rewrite_relative_path_with_inverse_rename(
+                            alternate_source_relative_path,
+                            failed_rename,
+                        )
+                        if alternate_candidate == alternate_source_relative_path:
+                            continue
+
+                        try:
+                            alternate_source = self._resolve_operation_path(
+                                folder_path,
+                                alternate_candidate,
+                            )
+                        except ValueError:
+                            continue
+
+                        if os.path.exists(alternate_source):
+                            source_relative_path = alternate_candidate
+                            source = alternate_source
+                            break
+                        alternate_source_relative_path = alternate_candidate
+
+                if op_type != "create_folder" and not os.path.exists(source):
+                    fuzzy_source = self._resolve_existing_path_with_fuzzy_segments(
+                        folder_path,
+                        source_relative_path,
+                    )
+                    if fuzzy_source:
+                        source = fuzzy_source
+
+                if op_type != "create_folder" and not os.path.exists(source):
                     results.append(
                         {
                             "success": False,
@@ -1210,90 +1770,136 @@ Correct JSON examples:
 
                 created_now = False
                 merged_entries = []
+                source_was_directory = False
 
-                if op_type == "create_folder":
-                    if os.path.exists(target):
-                        if not os.path.isdir(target):
+                try:
+                    if op_type == "create_folder":
+                        if os.path.exists(target):
+                            if not os.path.isdir(target):
+                                results.append(
+                                    {
+                                        "success": False,
+                                        "operation": operation,
+                                        "error": "Target path already exists and is not a directory",
+                                    }
+                                )
+                                continue
+                            created_now = False
+                        else:
+                            os.makedirs(target, exist_ok=False)
+                            created_now = True
+                    elif op_type == "move":
+                        source_was_directory = os.path.isdir(source)
+                        if source_was_directory:
+                            if os.path.exists(target):
+                                if not os.path.isdir(target):
+                                    results.append(
+                                        {
+                                            "success": False,
+                                            "operation": operation,
+                                            "error": "Target path already exists and is not a directory",
+                                        }
+                                    )
+                                    continue
+                                merged_entries = self._merge_directory_into_existing_target(
+                                    source,
+                                    target,
+                                )
+                            else:
+                                self._ensure_parent_directory(target)
+                                os.rename(source, target)
+                        else:
+                            if os.path.exists(target):
+                                results.append(
+                                    {
+                                        "success": False,
+                                        "operation": operation,
+                                        "error": "Target path already exists",
+                                    }
+                                )
+                                continue
+                            self._ensure_parent_directory(target)
+                            os.rename(source, target)
+                    elif op_type == "rename":
+                        if os.path.isdir(source):
                             results.append(
                                 {
                                     "success": False,
                                     "operation": operation,
-                                    "error": "Target path already exists and is not a directory",
+                                    "error": "Source path is a directory; use rename_folder instead",
                                 }
                             )
                             continue
-                        created_now = False
-                    else:
-                        os.makedirs(target, exist_ok=False)
-                        created_now = True
-                elif op_type == "move":
-                    self._ensure_parent_directory(target)
-                    os.rename(source, target)
-                elif op_type == "rename":
-                    if os.path.isdir(source):
-                        results.append(
-                            {
-                                "success": False,
-                                "operation": operation,
-                                "error": "Source path is a directory; use rename_folder instead",
-                            }
-                        )
-                        continue
-                    self._ensure_parent_directory(target)
-                    os.rename(source, target)
-                elif op_type == "rename_folder":
-                    if not os.path.isdir(source):
-                        results.append(
-                            {
-                                "success": False,
-                                "operation": operation,
-                                "error": "Source path is not a directory",
-                            }
-                        )
-                        continue
-                    if os.path.exists(target):
-                        if not os.path.isdir(target):
+                        if os.path.exists(target):
                             results.append(
                                 {
                                     "success": False,
                                     "operation": operation,
-                                    "error": "Target path already exists and is not a directory",
+                                    "error": "Target path already exists",
                                 }
                             )
                             continue
+                        self._ensure_parent_directory(target)
+                        os.rename(source, target)
+                    elif op_type == "rename_folder":
+                        if not os.path.isdir(source):
+                            results.append(
+                                {
+                                    "success": False,
+                                    "operation": operation,
+                                    "error": "Source path is not a directory",
+                                }
+                            )
+                            continue
+                        if os.path.exists(target):
+                            if not os.path.isdir(target):
+                                results.append(
+                                    {
+                                        "success": False,
+                                        "operation": operation,
+                                        "error": "Target path already exists and is not a directory",
+                                    }
+                                )
+                                continue
 
-                        try:
                             merged_entries = self._merge_directory_into_existing_target(
                                 source, target
                             )
-                        except ValueError as exc:
-                            results.append(
-                                {
-                                    "success": False,
-                                    "operation": operation,
-                                    "error": str(exc),
-                                }
+                        else:
+                            self._ensure_parent_directory(target)
+                            os.rename(source, target)
+                    elif op_type == "delete":
+                        if delete_backup_root is None:
+                            backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
+                            delete_backup_root = tempfile.mkdtemp(
+                                prefix=".openclaw-delete-",
+                                dir=backup_parent_dir,
                             )
-                            continue
-                    else:
-                        self._ensure_parent_directory(target)
-                        os.rename(source, target)
-                elif op_type == "delete":
-                    if delete_backup_root is None:
-                        backup_parent_dir = os.path.dirname(os.path.abspath(folder_path))
-                        delete_backup_root = tempfile.mkdtemp(
-                            prefix=".openclaw-delete-",
-                            dir=backup_parent_dir,
+                        backup_target = self._build_delete_backup_path(
+                            delete_backup_root, source_relative_path
                         )
-                    backup_target = self._build_delete_backup_path(
-                        delete_backup_root, source_relative_path
+                        backup_target = self._build_unique_backup_target(backup_target)
+                        self._ensure_parent_directory(backup_target)
+                        os.rename(source, backup_target)
+                        target = backup_target
+                    else:
+                        raise ValueError(f"Unsupported operation type: {op_type}")
+                except (OSError, ValueError) as exc:
+                    if op_type == "rename_folder":
+                        failed_renames.append(
+                            {
+                                "source": operation.get("source", ""),
+                                "target": operation.get("target", ""),
+                            }
+                        )
+                    results.append(
+                        {
+                            "success": False,
+                            "operation": operation,
+                            "error": str(exc),
+                        }
                     )
-                    backup_target = self._build_unique_backup_target(backup_target)
-                    self._ensure_parent_directory(backup_target)
-                    os.rename(source, backup_target)
-                    target = backup_target
-                else:
-                    raise ValueError(f"Unsupported operation type: {op_type}")
+                    continue
 
                 backup_info.append(
                     {
@@ -1302,12 +1908,14 @@ Correct JSON examples:
                         "target": target,
                         "temp_root": delete_backup_root if op_type == "delete" else "",
                         "created_now": created_now if op_type == "create_folder" else False,
-                        "merged_entries": merged_entries if op_type == "rename_folder" else [],
+                        "merged_entries": merged_entries
+                        if op_type in {"move", "rename_folder"}
+                        else [],
                     }
                 )
 
-                if op_type == "rename_folder":
-                    applied_renames.append(
+                if op_type == "rename_folder" or (op_type == "move" and source_was_directory):
+                    applied_path_rewrites.append(
                         {
                             "source": operation.get("source", ""),
                             "target": operation.get("target", ""),
@@ -1325,12 +1933,37 @@ Correct JSON examples:
                 "success": False,
                 "error": str(exc),
                 "backup_info": backup_info,
+                "results": results,
+                "all_succeeded": False,
+                "readme_generated": False,
+                "readme_path": "",
+                "readme_error": "",
             }
+
+        all_succeeded = bool(results) and all(
+            item.get("success") for item in results
+        )
+        readme_generated = False
+        readme_path = ""
+        readme_error = ""
+
+        if write_readme and all_succeeded:
+            try:
+                readme_result = self._write_structure_readme(folder_path, results)
+                backup_info.append(readme_result["backup_item"])
+                readme_generated = True
+                readme_path = readme_result["readme_path"]
+            except Exception as exc:
+                readme_error = str(exc)
 
         return {
             "success": True,
             "results": results,
             "backup_info": backup_info,
+            "all_succeeded": all_succeeded,
+            "readme_generated": readme_generated,
+            "readme_path": readme_path,
+            "readme_error": readme_error,
         }
 
     def rollback(self, backup_info):
@@ -1354,14 +1987,46 @@ Correct JSON examples:
                             pass
                     continue
 
-                if op_type == "rename_folder" and item.get("merged_entries"):
-                    self._ensure_parent_directory(source)
-                    os.makedirs(source, exist_ok=True)
-                    for child_name in reversed(item.get("merged_entries", [])):
-                        target_child = os.path.join(target, child_name)
-                        source_child = os.path.join(source, child_name)
-                        if os.path.exists(target_child):
-                            os.rename(target_child, source_child)
+                if op_type == "write_readme":
+                    existed_before = item.get("existed_before", False)
+                    if existed_before:
+                        if target and os.path.exists(target):
+                            os.remove(target)
+                        if source and os.path.exists(source):
+                            self._ensure_parent_directory(target)
+                            os.rename(source, target)
+                    elif target and os.path.exists(target):
+                        os.remove(target)
+                    continue
+
+                if op_type in {"move", "rename_folder"}:
+                    if item.get("merged_entries"):
+                        self._ensure_parent_directory(source)
+                        os.makedirs(source, exist_ok=True)
+                        for child_name in reversed(item.get("merged_entries", [])):
+                            target_child = os.path.join(target, child_name)
+                            source_child = os.path.join(source, child_name)
+                            if os.path.exists(target_child):
+                                os.rename(target_child, source_child)
+                        continue
+
+                    if target and os.path.exists(target):
+                        self._ensure_parent_directory(source)
+
+                        if os.path.exists(source):
+                            if not os.path.isdir(source):
+                                raise ValueError(
+                                    "Cannot rollback folder rename because the original path "
+                                    "already exists and is not a directory"
+                                )
+                            if not os.path.isdir(target):
+                                raise ValueError(
+                                    "Cannot rollback folder rename because the renamed path "
+                                    "is not a directory"
+                                )
+                            self._merge_directory_into_existing_target(target, source)
+                        else:
+                            os.rename(target, source)
                     continue
 
                 if op_type == "delete":
