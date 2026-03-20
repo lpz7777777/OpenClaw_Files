@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -23,6 +24,10 @@ class CloudSyncManager:
     def __init__(self):
         self.gateway_client = GatewayClient()
         self.timeout_seconds = max(self.gateway_client.timeout, 60)
+        self.status_probe_timeout_seconds = max(
+            2,
+            int(os.getenv("CLOUD_STATUS_PROBE_TIMEOUT", "3") or "3"),
+        )
         self.openclaw_cli_path = self.gateway_client.openclaw_cli_path
         self.bdpan_runtime = CommandRuntime.resolve(
             command_name="bdpan",
@@ -37,10 +42,36 @@ class CloudSyncManager:
         )
 
     def get_status(self) -> Dict[str, Any]:
-        gateway = self.gateway_client.probe_gateway_connection()
-        bdpan = self._probe_bdpan_status()
-        cron = self._probe_cron_status()
-        jobs = self._list_managed_jobs()
+        executor = ThreadPoolExecutor(max_workers=4)
+        try:
+            gateway_future = executor.submit(self.gateway_client.probe_gateway_connection)
+            bdpan_future = executor.submit(self._probe_bdpan_status)
+            cron_future = executor.submit(self._probe_cron_status)
+            jobs_future = executor.submit(self._list_managed_jobs)
+
+            gateway = self._resolve_status_future(
+                gateway_future,
+                fallback={"ok": False, "detail": "Gateway status check timed out."},
+            )
+            bdpan = self._resolve_status_future(
+                bdpan_future,
+                fallback={
+                    "installed": False,
+                    "authenticated": False,
+                    "detail": "bdpan status check timed out.",
+                },
+            )
+            cron = self._resolve_status_future(
+                cron_future,
+                fallback={
+                    "available": True,
+                    "enabled": False,
+                    "detail": "OpenClaw cron status check timed out.",
+                },
+            )
+            jobs = self._resolve_status_future(jobs_future, fallback=[])
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return {
             "success": True,
@@ -50,6 +81,12 @@ class CloudSyncManager:
             "jobs": jobs,
             "default_timezone": self.default_timezone,
         }
+
+    def _resolve_status_future(self, future, *, fallback):
+        try:
+            return future.result(timeout=self.status_probe_timeout_seconds)
+        except Exception:
+            return fallback
 
     def upload_folder(self, folder_path: str, remote_path: str) -> Dict[str, Any]:
         local_folder = self._validate_local_folder(folder_path)
@@ -544,7 +581,10 @@ class CloudSyncManager:
             }
 
         try:
-            result = self._run_bdpan_cli(["whoami", "--json"], timeout=20)
+            result = self._run_bdpan_cli(
+                ["whoami", "--json"],
+                timeout=self.status_probe_timeout_seconds,
+            )
         except Exception as exc:
             return {
                 "installed": True,
@@ -595,7 +635,10 @@ class CloudSyncManager:
             if self.gateway_client.gateway_token:
                 command_args.extend(["--token", self.gateway_client.gateway_token])
 
-            result = self.gateway_client.run_openclaw_cli(command_args, timeout=20)
+            result = self.gateway_client.run_openclaw_cli(
+                command_args,
+                timeout=self.status_probe_timeout_seconds,
+            )
         except Exception as exc:
             return {
                 "available": True,
@@ -637,7 +680,10 @@ class CloudSyncManager:
             if self.gateway_client.gateway_token:
                 command_args.extend(["--token", self.gateway_client.gateway_token])
 
-            result = self.gateway_client.run_openclaw_cli(command_args, timeout=20)
+            result = self.gateway_client.run_openclaw_cli(
+                command_args,
+                timeout=self.status_probe_timeout_seconds,
+            )
         except Exception:
             return []
 

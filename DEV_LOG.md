@@ -211,6 +211,7 @@ python discover_gateway.py
 - [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
 - [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
 - [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
 - [main.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/main.js)
 
 ### 4. 左侧栏：资源管理器
@@ -1544,3 +1545,60 @@ README 已同步补充以下内容：
 - [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
 - [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
 - [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+
+---
+
+## 24. 2026-03-20 Update: Right Sidebar Bottom Toolbar Reflow
+### 1. Goal
+
+After operation suggestions are generated, this round continues the right-sidebar UI polish:
+
+- move the operation-type filter buttons from the top of the "Operations" card down to the bottom action area, close to the main execution buttons
+- reorganize the bottom-right controls so their grouping is clearer
+- reduce the overall height of the whole bottom toolbar module
+
+### 2. Structural Change
+
+Instead of rewriting the existing filter logic, the frontend keeps the current `operationTypeFilters` rendering and click behavior, and only reorganizes the bottom-right DOM during initialization:
+
+- add `setupAnalysisActionLayout()`
+- split the bottom toolbar into three zones:
+  - `Filter`
+  - `Actions`
+  - `Tools`
+- map controls into these zones:
+  - `Filter` -> operation-type filter chips
+  - `Actions` -> `Confirm All / Regenerate / Rollback`
+  - `Tools` -> `Auto Analyze / Clear Output`
+
+This keeps the existing event wiring intact while completing the layout migration.
+
+### 3. Layout Result
+
+The bottom-right area is now closer to a compact IDE toolbar:
+
+- the three primary buttons in `Actions` stay in one row
+- `Filter / Actions / Tools` are grouped more clearly
+- paddings, gaps, button sizes, and switch sizes are reduced together
+- filter chips stay in a compact horizontal strip on desktop to avoid increasing panel height
+- narrow screens still fall back to a stacked layout for usability
+
+### 4. README Sync
+
+README was updated in the same round to reflect:
+
+- the new compact bottom toolbar in the project overview
+- the moved filter location in the prompt/auto-analyze description
+- the single-row `Actions` layout in the core capabilities section
+- a new recent-changes note for this toolbar cleanup
+
+### 5. Files
+
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 6. Verification
+
+- `node --check renderer.js`

@@ -81,7 +81,7 @@ class GatewayClient:
             hello = self._run_with_pairing_retry(self._probe_gateway_connection_once)
             return {
                 "ok": True,
-                "detail": "WebSocket connect succeeded",
+                "detail": "WebSocket 成功连接",
                 "server_version": hello.get("server", {}).get("version"),
                 "session_defaults": hello.get("snapshot", {}).get("sessionDefaults"),
                 "available_methods": hello.get("features", {}).get("methods", []),

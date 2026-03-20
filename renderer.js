@@ -1,10 +1,10 @@
-/**
+13/**
  * OpenClaw Files 前端渲染逻辑
- * 负责界面交互、文件预览、分析结果展示、百度网盘同步等功能
+ * 负责界面交互、文件预览分析结果展示百度网盘同步等功能
  */
 
 // 引入依赖
-const { ipcRenderer } = require("electron"); // Electron 进程间通信
+const { ipcRenderer } = require("electron"); // Electron 进程间信
 const axios = require("axios"); // HTTP 请求
 const fs = require("fs"); // 文件系统操作
 const path = require("path"); // 路径处理
@@ -15,16 +15,16 @@ const XLSX = require("xlsx"); // Excel 表格解析
  * 常量定义
  */
 const API_BASE = "http://localhost:8765"; // 后端 API 基础地址
-const PREVIEW_BYTE_LIMIT = 200 * 1024; // 文件预览大小限制（200KB）
-const WORD_EXTENSIONS = new Set([".doc", ".docx"]); // Word 文档扩展名
-const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]); // Excel 表格扩展名
-const THEME_STORAGE_KEY = "openclaw-workspace-theme"; // 主题存储键名
+const PREVIEW_BYTE_LIMIT = 200 * 1024;
+const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
+const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
+const THEME_STORAGE_KEY = "openclaw-workspace-theme";
 const AUTO_ANALYZE_STORAGE_KEY = "openclaw-auto-analyze-on-open";
 const FOLDER_INSTRUCTION_STORAGE_KEY = "openclaw-folder-instructions";
 const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
 const WECHAT_CLEANUP_MODE = "wechat_cleanup";
 
-/** 操作类型筛选配置：id -> { label, types[], tone }（tone 与 operation-type 的 CSS 类名一致） */
+/** 操作类型筛配置：id -> { label, types[], tone }（tone ?operation-type ?CSS 类名丢致） */
 const OPERATION_TYPE_FILTER_DEFS = [
     { id: "move", label: "移动", types: ["move"], tone: "move" },
     { id: "rename", label: "重命名文件", types: ["rename"], tone: "rename" },
@@ -40,32 +40,32 @@ const THEME_DEFINITIONS = [
     {
         id: "workspace",
         label: "雾杉",
-        description: "暖纸质感、沉稳配色，适合长时间整理文件。",
+        description: "Warm paper texture and grounded colors for long sorting sessions.",
     },
     {
         id: "mac",
         label: "晴空",
-        description: "明亮玻璃感和轻盈高光，保留 macOS 风格气质。",
+        description: "Bright glassy highlights with a light macOS-inspired feel.",
     },
     {
         id: "fjord",
         label: "北岸",
-        description: "冷静蓝灰与工程线稿感，适合偏技术型工作流。",
+        description: "Cool blue-gray tones with a technical workspace vibe.",
     },
     {
         id: "amber",
         label: "琥珀",
-        description: "奶油纸页和琥珀点缀，像在桌面上整理实体档案。",
+        description: "Creamy pages and amber accents like a desk full of folders.",
     },
     {
         id: "sage",
         label: "雨后",
-        description: "低饱和绿调与柔雾背景，视觉更松弛。",
+        description: "Low-saturation greens with a soft misty background.",
     },
     {
         id: "petal",
         label: "珊瑚",
-        description: "柔和珊瑚色和清晨云雾感，页面更有呼吸感。",
+        description: "Soft coral color and morning-cloud atmosphere with more breathing room.",
     },
 ];
 const THEMES = new Set(THEME_DEFINITIONS.map((theme) => theme.id)); // 主题 ID 集合
@@ -81,8 +81,7 @@ const FILE_TYPE_ICON_ASSETS = {
 };
 
 /**
- * 应用状态管理
- */
+ * 应用状管? */
 const state = {
     currentFolderPath: null,
     currentPlan: null,
@@ -103,7 +102,7 @@ const state = {
     completedOperationIndexes: new Set(),
     discardedOperationIndexes: new Set(),
     analysisTone: "idle",
-    analysisMessage: "选择文件夹后，这里会显示 OpenClaw 输出的整理建议、操作计划和执行结果。",
+    analysisMessage: "Choose a folder to see OpenClaw suggestions, operation plans, and execution results here.",
     currentTheme: "mac",
     cloudSyncStatus: null,
     cloudSyncFeedback: null,
@@ -133,35 +132,35 @@ const state = {
 /**
  * DOM 元素引用
  */
-const selectFolderBtn = document.getElementById("selectFolderBtn"); // 选择文件夹按钮
-const wechatCleanupBtn = document.getElementById("wechatCleanupBtn"); // 微信清理按钮
+const selectFolderBtn = document.getElementById("selectFolderBtn");
+const wechatCleanupBtn = document.getElementById("wechatCleanupBtn");
 const analyzeBtn = document.getElementById("analyzeBtn"); // 分析按钮
-const themeSelect = document.getElementById("themeSelect"); // 主题选择器
-const themeDescription = document.getElementById("themeDescription"); // 主题描述
+const themeSelect = document.getElementById("themeSelect");
+const themeDescription = document.getElementById("themeDescription");
 const selectedPath = document.getElementById("selectedPath"); // 选中路径显示
-const explorerStats = document.getElementById("explorerStats"); // 资源管理器统计
-const explorerTree = document.getElementById("explorerTree"); // 资源管理器树
+const explorerStats = document.getElementById("explorerStats");
+const explorerTree = document.getElementById("explorerTree");
 const instructionMeta = document.getElementById("instructionMeta");
 const instructionMessages = document.getElementById("instructionMessages");
 const instructionInput = document.getElementById("instructionInput");
 const sendInstructionBtn = document.getElementById("sendInstructionBtn");
-const tabStrip = document.getElementById("tabStrip"); // 标签栏
-const editorMeta = document.getElementById("editorMeta"); // 编辑器元信息
-const editorContent = document.getElementById("editorContent"); // 编辑器内容
-const analysisStatus = document.getElementById("analysisStatus"); // 分析状态
-const analysisMeta = document.getElementById("analysisMeta"); // 分析元信息
-const planSummary = document.getElementById("planSummary"); // 计划摘要
+const tabStrip = document.getElementById("tabStrip");
+const editorMeta = document.getElementById("editorMeta");
+const editorContent = document.getElementById("editorContent");
+const analysisStatus = document.getElementById("analysisStatus");
+const analysisMeta = document.getElementById("analysisMeta");
+const planSummary = document.getElementById("planSummary");
 const categoriesList = document.getElementById("categoriesList"); // 分类列表
-const operationsMeta = document.getElementById("operationsMeta"); // 操作元信息
-const operationTypeFilters = document.getElementById("operationTypeFilters"); // 操作类型筛选按钮
-const operationsList = document.getElementById("operationsList"); // 操作列表
+const operationsMeta = document.getElementById("operationsMeta");
+const operationTypeFilters = document.getElementById("operationTypeFilters");
+const operationsList = document.getElementById("operationsList");
 const resultDisplay = document.getElementById("resultDisplay"); // 结果显示
-const gatewayStatusPill = document.getElementById("gatewayStatusPill"); // Gateway 状态胶囊
-const gatewayStatusText = document.getElementById("gatewayStatusText"); // Gateway 状态文本
-const topbarJobsChips = document.getElementById("topbarJobsChips"); // 顶部任务芯片
-const bdpanMeta = document.getElementById("bdpanMeta"); // 百度网盘元信息
-const bdpanStatusCard = document.getElementById("bdpanStatusCard"); // 百度网盘状态卡片
-const bdpanRemotePathInput = document.getElementById("bdpanRemotePathInput"); // 百度网盘远程路径输入
+const gatewayStatusPill = document.getElementById("gatewayStatusPill");
+const gatewayStatusText = document.getElementById("gatewayStatusText");
+const topbarJobsChips = document.getElementById("topbarJobsChips");
+const bdpanMeta = document.getElementById("bdpanMeta");
+const bdpanStatusCard = document.getElementById("bdpanStatusCard");
+const bdpanRemotePathInput = document.getElementById("bdpanRemotePathInput");
 const bdpanUploadBtn = document.getElementById("bdpanUploadBtn"); // 百度网盘上传按钮
 const bdpanRefreshBtn = document.getElementById("bdpanRefreshBtn"); // 百度网盘刷新按钮
 const bdpanDailyTimeInput = document.getElementById("bdpanDailyTimeInput"); // 百度网盘每日时间输入
@@ -174,15 +173,15 @@ const rollbackBtn = document.getElementById("rollbackBtn"); // 回滚按钮
 const cancelBtn = document.getElementById("cancelBtn"); // 取消按钮
 const autoAnalyzeToggle = document.getElementById("autoAnalyzeToggle");
 const wechatCleanupDialog = document.getElementById("wechatCleanupDialog"); // 微信清理弹窗
-const wechatSourcePathInput = document.getElementById("wechatSourcePathInput"); // 微信源目录输入
-const wechatTargetPathInput = document.getElementById("wechatTargetPathInput"); // 微信目标目录输入
-const wechatSourceBrowseBtn = document.getElementById("wechatSourceBrowseBtn"); // 微信源目录浏览
-const wechatTargetBrowseBtn = document.getElementById("wechatTargetBrowseBtn"); // 微信目标目录浏览
+const wechatSourcePathInput = document.getElementById("wechatSourcePathInput");
+const wechatTargetPathInput = document.getElementById("wechatTargetPathInput");
+const wechatSourceBrowseBtn = document.getElementById("wechatSourceBrowseBtn");
+const wechatTargetBrowseBtn = document.getElementById("wechatTargetBrowseBtn");
 const wechatCleanupSaveBtn = document.getElementById("wechatCleanupSaveBtn"); // 微信清理保存
 const wechatCleanupRunBtn = document.getElementById("wechatCleanupRunBtn"); // 微信清理执行
 
 /**
- * 初始化主题选项
+ * 初始化主题项
  */
 renderThemeOptions();
 
@@ -243,8 +242,7 @@ sendInstructionBtn.addEventListener("click", async () => {
 });
 
 /**
- * 选择文件夹按钮点击事件
- */
+ * 选择文件夹按钮点击事? */
 selectFolderBtn.addEventListener("click", async () => {
     const folderPath = await ipcRenderer.invoke("select-folder");
     if (!folderPath) {
@@ -292,7 +290,7 @@ confirmBtn.addEventListener("click", async () => {
     const pending = getPendingOperations();
     const pendingAll = getPendingOperationsUnfiltered();
     if (pending.length === 0 && pendingAll.length === 0) {
-        setAnalysisStatus("error", "当前没有可执行的整理建议。");
+        setAnalysisStatus("error", "No executable suggestions are available right now.");
         renderAnalysis();
         return;
     }
@@ -300,8 +298,8 @@ confirmBtn.addEventListener("click", async () => {
     const disabledCount = pendingAll.length - pending.length;
     const confirmMsg =
         disabledCount > 0
-            ? `确定要一次性执行 ${pending.length} 条建议吗？另有 ${disabledCount} 条（未点亮的操作类型）将被直接丢弃。`
-            : `确定要一次性执行剩余的 ${pending.length} 条建议吗？`;
+            ? `Execute ${pending.length} suggestions now? ${disabledCount} suggestions from disabled operation types will be discarded.`
+            : `Execute the remaining ${pending.length} suggestions now?`;
     const confirmed = window.confirm(confirmMsg);
     if (!confirmed) {
         return;
@@ -315,11 +313,11 @@ confirmBtn.addEventListener("click", async () => {
     if (pending.length > 0) {
         await executeOperations(
             pending.map(({ index }) => index),
-            `正在执行剩余的 ${pending.length} 条操作，请稍候...`,
+            `Executing the remaining ${pending.length} operations...`,
             { writeReadme: state.analysisMode !== WECHAT_CLEANUP_MODE }
         );
     } else {
-        setAnalysisStatus("warning", `已丢弃 ${disabledCount} 条未点亮类型的建议，无其他可执行操作。`);
+        setAnalysisStatus("warning", `Discarded ${disabledCount} suggestions from disabled operation types. No other operations can be executed.`);
         renderAnalysis();
         updateActionState();
     }
@@ -330,17 +328,17 @@ confirmBtn.addEventListener("click", async () => {
  */
 rollbackBtn.addEventListener("click", async () => {
     if (!state.canRollback || state.isExecutingOperation || state.isCloudSyncBusy) {
-        setAnalysisStatus("error", "当前没有可回滚的操作。");
+        setAnalysisStatus("error", "There are no operations available to roll back right now.");
         renderAnalysis();
         return;
     }
 
-    const confirmed = window.confirm("确定要回滚最近这一轮已经确认执行的文件操作吗？");
+    const confirmed = window.confirm("Are you sure you want to roll back the most recently executed file operations?");
     if (!confirmed) {
         return;
     }
 
-    setAnalysisStatus("loading", "正在回滚最近的文件操作...");
+    setAnalysisStatus("loading", "Rolling back the latest file operations...");
     renderAnalysis();
     updateActionState();
 
@@ -350,29 +348,29 @@ rollbackBtn.addEventListener("click", async () => {
         if (response.data.success) {
             state.lastResult = {
                 type: "success",
-                message: "回滚成功，最近已执行的变更已恢复。",
+                message: "Rollback succeeded. The most recently executed changes have been restored.",
                 at: Date.now(),
             };
             state.canRollback = false;
             resetOperationProgress();
-            setAnalysisStatus("success", "回滚完成，目录树已刷新。");
+            setAnalysisStatus("success", "Rollback complete. The directory tree has been refreshed.");
             await loadFolderTree(state.currentFolderPath, true);
             openOverviewTab();
         } else {
             state.lastResult = {
                 type: "error",
-                message: `回滚失败：${response.data.error}`,
+                message: `Rollback failed: ${response.data.error}`,
                 at: Date.now(),
             };
-            setAnalysisStatus("error", `回滚失败：${response.data.error}`);
+            setAnalysisStatus("error", `Rollback failed: ${response.data.error}`);
         }
     } catch (error) {
         state.lastResult = {
             type: "error",
-            message: `回滚出错：${error.message}`,
+            message: `Rollback error: ${error.message}`,
             at: Date.now(),
         };
-        setAnalysisStatus("error", `回滚出错：${error.message}`);
+        setAnalysisStatus("error", `Rollback error: ${error.message}`);
     }
 
     renderAnalysis();
@@ -395,7 +393,7 @@ cancelBtn.addEventListener("click", () => {
     state.currentPlan = null;
     state.lastResult = null;
     resetOperationProgress();
-    setAnalysisStatus("idle", "输出已清空。你可以重新分析当前文件夹。");
+    setAnalysisStatus("idle", "Output cleared. You can analyze the current folder again.");
     renderAnalysis();
     renderEditor();
     updateActionState();
@@ -459,7 +457,7 @@ async function openFolder(folderPath, options = {}) {
         "loading",
         analysisMode === WECHAT_CLEANUP_MODE
             ? "正在读取微信文件目录并准备专项清理分析..."
-            : "正在读取目录结构并准备分析..."
+            : "正在读取目录结构并准备开始分析..."
     );
     renderAnalysis();
     updateActionState();
@@ -470,8 +468,8 @@ async function openFolder(folderPath, options = {}) {
         setAnalysisStatus(
             "idle",
             analysisMode === WECHAT_CLEANUP_MODE
-                ? "已读取微信文件目录。自动分析已关闭，请点击“重新生成”后再生成专项整理方案。"
-                : "已读取当前文件夹。自动分析已关闭，请点击“重新生成”后再开始分析。"
+                ? "微信文件目录已载入，当前已关闭自动分析。点击“重新生成”即可创建专项清理方案。"
+                : "文件夹已载入，当前已关闭自动分析。点击“重新生成”即可开始分析。"
         );
         renderAnalysis();
         updateActionState();
@@ -499,11 +497,11 @@ function initializeBdpanDefaults(folderPath) {
 
 function buildSelectedPathText() {
     if (!state.currentFolderPath) {
-        return "尚未打开任何文件夹";
+        return "No folder selected yet.";
     }
 
     if (state.analysisMode === WECHAT_CLEANUP_MODE && state.analysisTargetRootPath) {
-        return `${state.currentFolderPath}  →  ${state.analysisTargetRootPath}`;
+        return `${state.currentFolderPath} -> ${state.analysisTargetRootPath}`;
     }
 
     return state.currentFolderPath;
@@ -531,13 +529,13 @@ function persistWechatCleanupConfigFromDialog() {
     });
 
     if (!config.sourcePath) {
-        return { ok: false, message: "请先填写微信文件夹。" };
+        return { ok: false, message: "Please choose the WeChat source folder first." };
     }
     if (!config.targetPath) {
-        return { ok: false, message: "请先填写整理目标文件夹。" };
+        return { ok: false, message: "Please choose the target folder first." };
     }
     if (path.resolve(config.sourcePath) === path.resolve(config.targetPath)) {
-        return { ok: false, message: "微信文件夹和整理目标文件夹不能相同。" };
+        return { ok: false, message: "The WeChat source folder and target folder cannot be the same." };
     }
 
     state.wechatCleanupConfig = config;
@@ -566,7 +564,7 @@ async function runWechatCleanup() {
     }
 
     if (path.resolve(config.sourcePath) === path.resolve(config.targetPath)) {
-        window.alert("微信文件夹和整理目标文件夹不能相同。");
+        window.alert("The WeChat source folder and target folder cannot be the same.");
         openWechatCleanupDialog();
         return;
     }
@@ -587,9 +585,10 @@ async function loadCloudSyncStatus() {
     updateActionState();
 
     try {
-        const response = await axios.post(`${API_BASE}/cloud/status`, {});
+        const response = await axios.post(`${API_BASE}/cloud/status`, {}, { timeout: 6000 });
         if (response.data.success) {
             state.cloudSyncStatus = response.data;
+            state.cloudSyncFeedback = null;
             if (state.currentFolderPath && !state.bdpanRemotePathEdited && !state.bdpanRemotePath) {
                 initializeBdpanDefaults(state.currentFolderPath);
             }
@@ -600,14 +599,15 @@ async function loadCloudSyncStatus() {
         } else {
             state.cloudSyncFeedback = {
                 type: "error",
-                message: `同步状态检查失败：${response.data.error}`,
+                message: `同步状检查失败：${response.data.error}`,
                 at: Date.now(),
             };
         }
     } catch (error) {
+        state.cloudSyncStatus = null;
         state.cloudSyncFeedback = {
             type: "error",
-            message: `同步状态检查失败：${error.message}`,
+            message: `同步状检查失败：${error.message}`,
             at: Date.now(),
         };
     } finally {
@@ -661,7 +661,7 @@ async function analyzeFolder(folderPath, options = {}) {
         "loading",
         mode === WECHAT_CLEANUP_MODE
             ? "OpenClaw 正在分析微信文件，并生成分类整理方案..."
-            : "OpenClaw 正在分析当前文件夹结构..."
+            : "OpenClaw 正在分析当前文件夹结构，并生成整理建议..."
     );
     renderAnalysis();
     updateActionState();
@@ -679,12 +679,12 @@ async function analyzeFolder(folderPath, options = {}) {
             setAnalysisStatus(
                 "success",
                 mode === WECHAT_CLEANUP_MODE
-                    ? "微信文件清理方案已生成，右侧可确认执行到目标目录。"
-                    : "分析完成，右侧已生成更细的整理建议。"
+                    ? "微信专项清理方案已生成，可在右侧查看并执行。"
+                    : "分析完成，详细整理建议已出现在右侧面板。"
             );
             openOverviewTab();
         } else {
-            setAnalysisStatus("error", `分析失败：${response.data.error}`);
+            setAnalysisStatus("error", `Analysis failed: ${response.data.error}`);
         }
     } catch (error) {
         setAnalysisStatus("error", `无法连接到后端服务：${error.message}`);
@@ -763,7 +763,7 @@ function renderExplorer() {
     if (!state.currentTree || !state.currentFolderPath) {
         explorerStats.textContent = "等待打开";
         explorerTree.className = "explorer-tree empty-state";
-        explorerTree.textContent = "选择一个文件夹后，这里会显示完整的目录结构。";
+        explorerTree.textContent = "Choose a folder and the full directory structure will appear here.";
         renderFolderInstructions();
         return;
     }
@@ -969,7 +969,7 @@ function renderTabStrip() {
         } else {
             const pinned = document.createElement("span");
             pinned.className = "tab-pin";
-            pinned.textContent = "•";
+            pinned.textContent = "概";
             tabButton.appendChild(pinned);
         }
 
@@ -1243,10 +1243,10 @@ async function readWordPreview(filePath, fileStat, extension) {
         return {
             kind: "word",
             paragraphs: [
-                "当前版本支持直接预览 .docx 文件。",
-                "旧版 .doc 文件缺少稳定的无依赖解析能力，因此这里先提供文件信息与兼容性提示。",
+                "This version can preview .docx files directly.",
+                "Legacy .doc files do not yet have a stable dependency-free parser, so only file information is shown for now.",
             ],
-            notice: "建议将 .doc 转为 .docx 后获得更完整的正文预览。",
+            notice: "Convert .doc to .docx for a fuller preview.",
             size: fileStat.size,
             modifiedAt: fileStat.mtimeMs,
         };
@@ -1263,7 +1263,7 @@ async function readWordPreview(filePath, fileStat, extension) {
         kind: "word",
         paragraphs,
         notice: result.messages.length
-            ? "文档已解析，部分复杂格式可能在预览中被简化。"
+            ? "The document was parsed. Some complex formatting may be simplified in preview."
             : "",
         size: fileStat.size,
         modifiedAt: fileStat.mtimeMs,
@@ -1296,7 +1296,7 @@ async function readSpreadsheetPreview(filePath, fileStat) {
         headers,
         rows,
         sheetName: firstSheetName,
-        notice: totalRows > rows.length ? `当前仅预览前 ${rows.length} 行数据。` : "",
+        notice: totalRows > rows.length ? `当前仅预览前 ${rows.length} 行数据` : "",
         size: fileStat.size,
         modifiedAt: fileStat.mtimeMs,
     };
@@ -1314,7 +1314,7 @@ function renderAnalysis() {
         analysisMeta.textContent = "执行中";
     } else {
         const modeLabel = state.analysisMode === WECHAT_CLEANUP_MODE ? "微信清理" : "标准整理";
-        analysisMeta.textContent = `${modeLabel} · ${getPendingOperations().length} pending · ${state.treeStats.files} files`;
+        analysisMeta.textContent = `${modeLabel} · ${getPendingOperations().length} 项待执行 · ${state.treeStats.files} 个文件`;
     }
 
     if (state.currentPlan) {
@@ -1358,7 +1358,7 @@ function renderAnalysis() {
         });
     } else {
         operationsList.className = "operations-list empty-inline";
-        operationsList.textContent = "还没有可执行的整理操作。";
+        operationsList.textContent = "No executable operations yet.";
     }
 
     if (state.lastResult) {
@@ -1369,7 +1369,7 @@ function renderAnalysis() {
         `;
     } else {
         resultDisplay.className = "result-display empty-inline";
-        resultDisplay.textContent = "尚未执行任何文件操作。";
+        resultDisplay.textContent = "No file operations have been executed yet.";
     }
 
     renderCloudSyncPanel();
@@ -1382,11 +1382,11 @@ function getJobScheduleLabel(job) {
     }
 
     const cronExpression = String(job?.cron || "").trim();
-    return cronExpression ? `Cron ${cronExpression}` : "未配置时间";
+    return cronExpression ? `Cron ${cronExpression}` : "No schedule configured";
 }
 
 function getJobDisplayName(job) {
-    const folderName = path.basename(String(job?.folder_path || "").trim()) || "未命名任务";
+    const folderName = path.basename(String(job?.folder_path || "").trim()) || "Untitled Job";
     return `${folderName} · ${getJobScheduleLabel(job)}`;
 }
 
@@ -1396,22 +1396,22 @@ function renderTopbarCloudSummary(status, jobs) {
 
     if (state.isCloudSyncLoading && !status) {
         gatewayStatusPill.className = "sync-status-pill neutral";
-        gatewayStatusPill.textContent = "Gateway 检查中";
-        gatewayStatusText.textContent = "正在连接 OpenClaw Gateway 并加载定时任务...";
+        gatewayStatusPill.textContent = "Gateway 检查中...";
+        gatewayStatusText.textContent = "正在连接到OpenClaw Gateway，获取同步状态...";
     } else if (!status && state.cloudSyncFeedback?.type === "error") {
         gatewayStatusPill.className = "sync-status-pill error";
-        gatewayStatusPill.textContent = "Gateway 状态异常";
+        gatewayStatusPill.textContent = "Gateway error";
         gatewayStatusText.textContent = state.cloudSyncFeedback.message;
     } else if (status) {
         gatewayStatusPill.className = `sync-status-pill ${gatewayOk ? "ok" : "error"}`;
-        gatewayStatusPill.textContent = gatewayOk ? "Gateway 已连接" : "Gateway 不可用";
+        gatewayStatusPill.textContent = gatewayOk ? "Gateway 可用" : "Gateway 不可用";
         gatewayStatusText.textContent =
             String(gateway.detail || "").trim() ||
-            (gatewayOk ? "OpenClaw Gateway 连接正常。" : "尚未连接到 OpenClaw Gateway。");
+            (gatewayOk ? "OpenClaw Gateway 已连接." : "OpenClaw Gateway is not connected yet.");
     } else {
         gatewayStatusPill.className = "sync-status-pill neutral";
-        gatewayStatusPill.textContent = "Gateway 未检查";
-        gatewayStatusText.textContent = "尚未检查 OpenClaw Gateway。";
+        gatewayStatusPill.textContent = "Gateway unchecked";
+        gatewayStatusText.textContent = "OpenClaw Gateway has not been checked yet.";
     }
 
     if (jobs.length > 0) {
@@ -1420,7 +1420,7 @@ function renderTopbarCloudSummary(status, jobs) {
             .map(
                 (job) => `
                     <span class="topbar-job-chip ${job.enabled ? "ok" : "warning"}" title="${escapeHtml(
-                        `${job.name || "未命名任务"} ｜ ${job.folder_path || "-"} ｜ ${job.remote_path || "-"}`
+                        `${job.name || "Untitled Job"} ? ${job.folder_path || "-"} ? ${job.remote_path || "-"}`
                     )}">
                         ${escapeHtml(getJobDisplayName(job))}
                     </span>
@@ -1451,13 +1451,13 @@ function renderCloudSyncPanel() {
     renderTopbarCloudSummary(status, jobs);
 
     if (state.isCloudSyncLoading) {
-        bdpanMeta.textContent = "检查中";
+        bdpanMeta.textContent = "Checking";
     } else if (state.isCloudSyncBusy) {
-        bdpanMeta.textContent = "执行中";
+        bdpanMeta.textContent = "Running";
     } else if (!hasConfirmedStatus) {
-        bdpanMeta.textContent = "未检查";
+        bdpanMeta.textContent = "Unchecked";
     } else {
-        bdpanMeta.textContent = `${jobs.length} 个任务`;
+        bdpanMeta.textContent = `${jobs.length} jobs`;
     }
 
     const statusLines = [];
@@ -1466,15 +1466,15 @@ function renderCloudSyncPanel() {
         statusLines.push(
             `<div class="sync-status-line sync-status-note"><span>${
                 state.isCloudSyncLoading
-                    ? "正在刷新百度网盘登录状态和定时任务信息..."
-                    : "等待完成一次状态刷新后，这里会显示百度网盘登录状态和定时任务摘要。"
+                    ? "正在刷新百度网盘登录状和定时任务信息..."
+                    : "Finish one refresh to see Baidu login status and scheduled jobs here."
             }</span></div>`
         );
     } else {
         if (bdpanStatus.installed) {
             const authText = bdpanStatus.authenticated
                 ? `百度网盘已登录：${bdpanStatus.username || "当前账户"}`
-                : "百度网盘未登录或登录已失效";
+                : "Baidu Netdisk is not logged in or the session has expired.";
             const authDetail = bdpanStatus.authenticated
                 ? bdpanStatus.token_expires_in || bdpanStatus.expires_at || ""
                 : bdpanStatus.detail || "";
@@ -1486,8 +1486,8 @@ function renderCloudSyncPanel() {
             );
         } else {
             statusLines.push(
-                `<div class="sync-status-line"><span class="sync-status-pill error">bdpan 未安装</span><span>${escapeHtml(
-                    bdpanStatus.detail || "未找到 bdpan CLI。"
+                `<div class="sync-status-line"><span class="sync-status-pill error">bdpan not installed</span><span>${escapeHtml(
+                    bdpanStatus.detail || "bdpan CLI was not found."
                 )}</span></div>`
             );
         }
@@ -1495,8 +1495,8 @@ function renderCloudSyncPanel() {
         statusLines.push(
             `<div class="sync-status-line"><span class="sync-status-pill ${
                 cronStatus.enabled ? "ok" : "warning"
-            }">${cronStatus.enabled ? "定时调度已启用" : "定时调度未启用"}</span><span>${escapeHtml(
-                cronStatus.detail || "尚未检查 OpenClaw cron。"
+            }>${cronStatus.enabled ? "Scheduler enabled" : "Scheduler disabled"}</span><span>${escapeHtml(
+                cronStatus.detail || "OpenClaw cron has not been checked yet."
             )}</span></div>`
         );
     }
@@ -1525,16 +1525,16 @@ function renderCloudSyncPanel() {
                 (job) => `
                     <article class="sync-job-item">
                         <div class="sync-job-topline">
-                            <strong>${escapeHtml(job.name || "未命名任务")}</strong>
+                            <strong>${escapeHtml(job.name || "Untitled Job")}</strong>
                             <div class="sync-job-actions">
                                 <span class="sync-job-pill ${job.enabled ? "ok" : "warning"}">${
-                                    job.enabled ? "已启用" : "已停用"
+                                    job.enabled ? "Enabled" : "Disabled"
                                 }</span>
                                 <button
                                     type="button"
                                     class="ghost-btn sync-job-remove-btn"
                                     data-job-id="${escapeHtml(job.id || "")}"
-                                    data-job-name="${escapeHtml(job.name || "未命名任务")}"
+                                    data-job-name="${escapeHtml(job.name || "Untitled Job")}"
                                     ${state.isCloudSyncBusy ? "disabled" : ""}
                                 >
                                     取消任务
@@ -1553,7 +1553,7 @@ function renderCloudSyncPanel() {
                         </div>
                         ${
                             job.next_run_at
-                                ? `<div class="sync-job-next">下次执行：${escapeHtml(job.next_run_at)}</div>`
+                                ? `<div class="sync-job-next">Next run: ${escapeHtml(job.next_run_at)}</div>`
                                 : ""
                         }
                     </article>
@@ -1570,7 +1570,7 @@ function renderCloudSyncPanel() {
         });
     } else {
         bdpanJobsList.className = "bdpan-jobs empty-inline";
-        bdpanJobsList.textContent = "暂无由当前应用创建的百度网盘同步任务。";
+        bdpanJobsList.textContent = "No Baidu Netdisk sync tasks created by this app yet.";
     }
 }
 
@@ -1597,7 +1597,7 @@ function renderOperationTypeFilters() {
             ? `operation-type-filter-chip tone-${def.tone} ${anyEnabled ? "is-enabled" : "is-disabled"}`
             : `operation-type-filter-chip tone-${def.tone} is-empty`;
         return `<button type="button" class="${className}" data-filter-id="${escapeHtml(def.id)}" title="${
-            anyEnabled ? "点击熄灭：该类型将不可执行" : "点击点亮：该类型可执行"
+            anyEnabled ? "点击后将关闭该类型，执行时会自动跳过。" : "点击后将启用该类型，执行时会纳入处理。"
         }">${escapeHtml(def.label)}</button>`;
     }).join("");
 
@@ -1618,17 +1618,17 @@ function renderOperationTypeFilters() {
 function getOperationMeta(operation) {
     switch (operation?.type) {
         case "move":
-            return { label: "移动", tone: "move", sourceLabel: "源", targetLabel: "目标" };
+            return { label: "移动", tone: "move", sourceLabel: "来源", targetLabel: "目标" };
         case "rename":
-            return { label: "重命名文件", tone: "rename", sourceLabel: "源", targetLabel: "目标" };
+            return { label: "重命名文件", tone: "rename", sourceLabel: "原路径", targetLabel: "新路径" };
         case "rename_folder":
-            return { label: "重命名文件夹", tone: "rename-folder", sourceLabel: "目录", targetLabel: "新目录" };
+            return { label: "重命名文件夹", tone: "rename-folder", sourceLabel: "原目录", targetLabel: "新目录" };
         case "create_folder":
-            return { label: "创建文件夹", tone: "create-folder", sourceLabel: "", targetLabel: "目录" };
+            return { label: "新建文件夹", tone: "create-folder", sourceLabel: "", targetLabel: "创建到" };
         case "delete":
             return { label: "删除", tone: "delete", sourceLabel: "路径", targetLabel: "" };
         default:
-            return { label: "整理", tone: "rename", sourceLabel: "源", targetLabel: "目标" };
+            return { label: "操作", tone: "rename", sourceLabel: "来源", targetLabel: "目标" };
     }
 }
 
@@ -1645,7 +1645,7 @@ function renderOperationItem(operation, index) {
         : "";
     const itemStateClass = isCompleted ? "is-completed" : isDiscarded ? "is-discarded" : !typeEnabled ? "is-type-disabled" : "";
     const actionMarkup = isCompleted
-        ? '<span class="operation-status-badge">已执行</span>'
+        ? '<span class="operation-status-badge">已完成</span>'
         : isDiscarded
         ? '<span class="operation-status-badge is-discarded">已丢弃</span>'
         : !typeEnabled
@@ -1661,7 +1661,7 @@ function renderOperationItem(operation, index) {
                     <span class="operation-type ${operationMeta.tone}">${operationMeta.label}</span>
                     ${actionMarkup}
                 </div>
-                <span class="operation-reason">${escapeHtml(operation.reason || "无说明")}</span>
+                <span class="operation-reason">${escapeHtml(operation.reason || "未提供原因")}</span>
             </div>
             <div class="operation-paths">
                 ${sourceMarkup}
@@ -1674,7 +1674,7 @@ function renderOperationItem(operation, index) {
 function renderSummaryMarkup(plan) {
     const summaryPoints = getSummaryPoints(plan);
     if (summaryPoints.length === 0) {
-        return '<p class="empty-inline">暂无分析摘要。</p>';
+        return '<p class="empty-inline">No analysis summary yet.</p>';
     }
 
     return `
@@ -1714,7 +1714,7 @@ function getSummaryPoints(plan) {
     }
 
     return summaryText
-        .split(/[；;。]/)
+        .split(/[。！？.!?]/)
         .map((part) => part.trim())
         .filter(Boolean);
 }
@@ -1788,21 +1788,21 @@ function renderFolderInstructions() {
     const isBusy = state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy;
 
     if (!hasFolder) {
-        instructionMeta.textContent = "未发送";
+        instructionMeta.textContent = "Not sent";
         instructionMessages.className = "instruction-messages empty-inline";
-        instructionMessages.textContent = "打开文件夹后，你可以在这里补充希望 OpenClaw 如何整理这个文件夹。";
+        instructionMessages.textContent = "After opening a folder, you can add extra instructions for how OpenClaw should organize it here.";
         instructionInput.value = "";
         instructionInput.disabled = true;
         return;
     }
 
-    instructionMeta.textContent = `${messages.length} 条要求`;
+    instructionMeta.textContent = `${messages.length} requests`;
     instructionInput.disabled = false;
     instructionInput.value = state.instructionDraft;
 
     if (messages.length === 0) {
         instructionMessages.className = "instruction-messages empty-inline";
-        instructionMessages.textContent = "还没有发送整理要求。你可以补充命名规则、归档方式或不想被移动的内容。";
+        instructionMessages.textContent = "No extra instructions yet. Add naming rules, archive preferences, or exclusions here.";
         return;
     }
 
@@ -1971,7 +1971,7 @@ async function uploadCurrentFolderToBdpan() {
     if (!remotePath) {
         state.cloudSyncFeedback = {
             type: "error",
-            message: "请先填写百度网盘目标路径。",
+            message: "Please enter the Baidu Netdisk target path first.",
             at: Date.now(),
         };
         renderCloudSyncPanel();
@@ -1980,7 +1980,7 @@ async function uploadCurrentFolderToBdpan() {
     }
 
     const confirmed = window.confirm(
-        `确定要把当前文件夹上传到百度网盘吗？\n\n本地目录：${state.currentFolderPath}\n网盘路径：${remotePath}\n\n说明：立即上传会直接调用本机 bdpan CLI，以避免大文件夹通过聊天链路中途停住。`
+        `Upload the current folder to Baidu Netdisk now?\n\nLocal folder: ${state.currentFolderPath}\nRemote path: ${remotePath}\n\nThis uses the local bdpan CLI directly to avoid large uploads stalling through the chat path.`
     );
     if (!confirmed) {
         return;
@@ -2010,7 +2010,7 @@ async function uploadCurrentFolderToBdpan() {
         const errorMessage = error.response?.data?.error || error.message;
         state.cloudSyncFeedback = {
             type: "error",
-            message: `百度网盘上传失败：${errorMessage}`,
+            message: `Baidu Netdisk upload failed: ${errorMessage}`,
             at: Date.now(),
         };
     } finally {
@@ -2036,7 +2036,7 @@ async function createBdpanSchedule() {
     if (!remotePath || !dailyTime || !timezone) {
         state.cloudSyncFeedback = {
             type: "error",
-            message: "请先填写完整的网盘路径、每日同步时间和时区。",
+            message: "Please complete the remote path, daily sync time, and timezone first.",
             at: Date.now(),
         };
         renderCloudSyncPanel();
@@ -2045,7 +2045,7 @@ async function createBdpanSchedule() {
     }
 
     const confirmed = window.confirm(
-        `确定要创建一个每日自动同步到百度网盘的任务吗？\n\n本地目录：${state.currentFolderPath}\n网盘路径：${remotePath}\n每日时间：${dailyTime}\n时区：${timezone}`
+        `Create a daily automatic sync task to Baidu Netdisk?\n\nLocal folder: ${state.currentFolderPath}\nRemote path: ${remotePath}\nDaily time: ${dailyTime}\nTimezone: ${timezone}`
     );
     if (!confirmed) {
         return;
@@ -2082,7 +2082,7 @@ async function createBdpanSchedule() {
         const errorMessage = error.response?.data?.error || error.message;
         state.cloudSyncFeedback = {
             type: "error",
-            message: `创建定时同步失败：${errorMessage}`,
+            message: `Failed to create scheduled sync: ${errorMessage}`,
             at: Date.now(),
         };
     } finally {
@@ -2103,7 +2103,7 @@ async function removeBdpanSchedule(jobId, jobName) {
         return;
     }
 
-    const confirmed = window.confirm(`确定要取消这个定时任务吗？\n\n任务：${jobName || jobId}`);
+    const confirmed = window.confirm(`Cancel this scheduled task?\n\nTask: ${jobName || jobId}`);
     if (!confirmed) {
         return;
     }
@@ -2111,7 +2111,7 @@ async function removeBdpanSchedule(jobId, jobName) {
     state.isCloudSyncBusy = true;
     state.cloudSyncFeedback = {
         type: "loading",
-        message: `正在取消定时任务：${jobName || jobId}`,
+        message: `Cancelling scheduled task: ${jobName || jobId}`,
         at: Date.now(),
     };
     renderCloudSyncPanel();
@@ -2131,7 +2131,7 @@ async function removeBdpanSchedule(jobId, jobName) {
         const errorMessage = error.response?.data?.error || error.message;
         state.cloudSyncFeedback = {
             type: "error",
-            message: `取消定时任务失败：${errorMessage}`,
+            message: `Failed to cancel scheduled task: ${errorMessage}`,
             at: Date.now(),
         };
     } finally {
@@ -2143,8 +2143,7 @@ async function removeBdpanSchedule(jobId, jobName) {
 }
 
 /**
- * 构建云同步消息
- * @param {Object} payload - 消息内容
+ * 构建云同步消? * @param {Object} payload - 消息内容
  * @returns {string} 构建后的消息
  */
 function buildCloudSyncMessage(payload) {
@@ -2159,13 +2158,13 @@ function buildCloudSyncMessage(payload) {
         parts.push(summary);
     }
     if (remotePath) {
-        parts.push(`目标路径：${remotePath}`);
+        parts.push(`Target path: ${remotePath}`);
     }
     if (dailyTime) {
-        parts.push(`每日时间：${dailyTime}`);
+        parts.push(`Daily time: ${dailyTime}`);
     }
     if (details.length > 0) {
-        parts.push(`细节：${details.join("；")}`);
+        parts.push(`Details: ${details.join("；")}`);
     }
     if (nextStep) {
         parts.push(`下一步：${nextStep}`);
@@ -2188,12 +2187,12 @@ async function executeSingleOperation(index) {
         return;
     }
 
-    const confirmed = window.confirm("确定要执行这条整理建议吗？");
+    const confirmed = window.confirm("现在执行这条建议吗？");
     if (!confirmed) {
         return;
     }
 
-    await executeOperations([index], "正在执行当前确认的操作...");
+    await executeOperations([index], "正在执行所选建议...");
 }
 
 /**
@@ -2275,12 +2274,12 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
 
             if (discardedCount === 0) {
                 const baseMessage = isWechatCleanup
-                    ? `已完成 ${successCount} 条微信文件整理操作，文件已开始归档到目标目录。`
+                    ? `已完成 ${successCount} 条微信清理操作，文件正在整理到目标目录。`
                     : options.writeReadme
-                    ? `已完成 ${successCount} 条操作，当前整理结果已落盘。`
-                    : `已执行 ${successCount} 条操作，剩余 ${remainingCount} 条待确认。`;
+                    ? `已完成 ${successCount} 条操作，并将最新整理结果写入磁盘。`
+                    : `已完成 ${successCount} 条操作，仍有 ${remainingCount} 条建议等待确认。`;
                 const readmeMessage = readmeGenerated
-                    ? " 已在打开文件夹的根目录写入 README.md。"
+                    ? " 已在当前打开目录的根目录写入 README.md。"
                     : readmeError
                     ? ` README.md 写入失败：${readmeError}`
                     : "";
@@ -2293,12 +2292,12 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                 setAnalysisStatus(
                     readmeError ? "error" : "success",
                     isWechatCleanup
-                        ? "微信文件清理操作已执行，源目录与目标目录已同步更新。"
+                        ? "微信清理操作已执行完成，源目录和目标目录都已刷新。"
                         : readmeGenerated
-                        ? "全部操作已执行，README 已写入根目录。"
+                        ? "全部操作已执行完成，并已在根目录写入 README.md。"
                         : readmeError
-                        ? `操作已执行，但 README 写入失败：${readmeError}`
-                        : "操作已执行，目录树已同步刷新。"
+                        ? `操作已执行完成，但 README.md 写入失败：${readmeError}`
+                        : "操作已执行完成，目录树已刷新。"
                 );
             } else {
                 const discardedSummary = discardedResults
@@ -2307,7 +2306,7 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                     .filter(Boolean)
                     .join("；");
                 const readmeMessage = readmeGenerated
-                    ? " 已在打开文件夹的根目录写入 README.md。"
+                    ? " 已在当前打开目录的根目录写入 README.md。"
                     : readmeError
                     ? ` README.md 写入失败：${readmeError}`
                     : "";
@@ -2317,10 +2316,10 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                     message:
                         `${
                             isWechatCleanup
-                                ? `本轮成功执行 ${successCount} 条微信文件整理操作，已丢弃 ${discardedCount} 条无法执行的建议。`
-                                : `本轮成功执行 ${successCount} 条，已丢弃 ${discardedCount} 条无法执行的建议。`
+                                ? `本轮已执行 ${successCount} 条微信清理操作，并丢弃了 ${discardedCount} 条无法执行的建议。`
+                                : `本轮已执行 ${successCount} 条操作，并丢弃了 ${discardedCount} 条无法执行的建议。`
                         }` +
-                        (remainingCount > 0 ? ` 剩余 ${remainingCount} 条待确认。` : "") +
+                        (remainingCount > 0 ? ` 仍有 ${remainingCount} 条建议等待确认。` : "") +
                         (discardedSummary ? ` 丢弃原因：${discardedSummary}` : "") +
                         readmeMessage,
                     at: Date.now(),
@@ -2329,32 +2328,32 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
                     readmeError ? "error" : "warning",
                     isWechatCleanup
                         ? remainingCount > 0
-                            ? `已自动丢弃 ${discardedCount} 条无法执行的微信清理建议，剩余 ${remainingCount} 条待确认。`
+                            ? `已自动丢弃 ${discardedCount} 条无法执行的微信清理建议，仍有 ${remainingCount} 条建议等待确认。`
                             : `已自动丢弃 ${discardedCount} 条无法执行的微信清理建议。`
                         : remainingCount > 0
                         ? readmeGenerated
-                            ? `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认，README 已写入根目录。`
-                            : `已自动丢弃 ${discardedCount} 条无法执行的建议，剩余 ${remainingCount} 条待确认。`
+                            ? `已自动丢弃 ${discardedCount} 条无法执行的建议，仍有 ${remainingCount} 条建议等待确认，并已在根目录写入 README.md。`
+                            : `已自动丢弃 ${discardedCount} 条无法执行的建议，仍有 ${remainingCount} 条建议等待确认。`
                         : readmeGenerated
-                        ? `已自动丢弃 ${discardedCount} 条无法执行的建议，README 已写入根目录。`
+                        ? `已自动丢弃 ${discardedCount} 条无法执行的建议，并已在根目录写入 README.md。`
                         : `已自动丢弃 ${discardedCount} 条无法执行的建议。`
                 );
             }
         } else {
             state.lastResult = {
                 type: "error",
-                message: `执行失败：${response.data.error}`,
+                message: `Execution failed: ${response.data.error}`,
                 at: Date.now(),
             };
-            setAnalysisStatus("error", `执行失败：${response.data.error}`);
+            setAnalysisStatus("error", `Execution failed: ${response.data.error}`);
         }
     } catch (error) {
         state.lastResult = {
             type: "error",
-            message: `执行出错：${error.message}`,
+            message: `Execution error: ${error.message}`,
             at: Date.now(),
         };
-        setAnalysisStatus("error", `执行出错：${error.message}`);
+        setAnalysisStatus("error", `Execution error: ${error.message}`);
     } finally {
         state.isExecutingOperation = false;
         renderAnalysis();
@@ -2363,9 +2362,7 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
 }
 
 /**
- * 获取待执行的操作（不含类型筛选，仅排除已处理）
- * @returns {Array} 待执行操作数组
- */
+ * 获取待执行的操作（不含类型筛选，仅排除已处理? * @returns {Array} 待执行操作数? */
 function getPendingOperationsUnfiltered() {
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
     return operations
@@ -2374,16 +2371,14 @@ function getPendingOperationsUnfiltered() {
 }
 
 /**
- * 获取待执行的操作（仅含已点亮类型的、未完成的）
- * @returns {Array} 待执行操作数组
- */
+ * 获取待执行的操作（仅含已点亮类型的未完成的）
+ * @returns {Array} 待执行操作数? */
 function getPendingOperations() {
     return getPendingOperationsUnfiltered().filter(({ operation }) => isOperationTypeEnabled(operation?.type));
 }
 
 /**
- * 清理不存在的标签页
- */
+ * 清理不存在的标签? */
 async function pruneMissingTabs() {
     const remainingTabs = [];
 
@@ -2409,8 +2404,7 @@ async function pruneMissingTabs() {
 
 /**
  * 判断是否为二进制文件
- * @param {Buffer} buffer - 文件缓冲区
- * @returns {boolean} 是否为二进制文件
+ * @param {Buffer} buffer - 文件缓冲? * @returns {boolean} 是否为二进制文件
  */
 function looksBinary(buffer) {
     if (buffer.length === 0) {
@@ -2431,11 +2425,7 @@ function looksBinary(buffer) {
 }
 
 /**
- * 获取文件图标元数据
- * @param {string} fileName - 文件名
- * @param {string} extension - 文件扩展名
- * @returns {Object} 图标元数据
- */
+ * 获取文件图标元数? * @param {string} fileName - 文件? * @param {string} extension - 文件扩展? * @returns {Object} 图标元数? */
 function fileIconMeta(fileName, extension) {
     const normalizedName = String(fileName || "").toLowerCase();
     const extensionToAsset = {
@@ -2517,8 +2507,7 @@ function fileIconMeta(fileName, extension) {
 }
 
 /**
- * 格式化字节大小
- * @param {number} value - 字节大小
+ * 格式化字节大? * @param {number} value - 字节大小
  * @returns {string} 格式化后的字符串
  */
 function formatBytes(value) {
@@ -2539,9 +2528,7 @@ function formatBytes(value) {
 }
 
 /**
- * 格式化日期时间
- * @param {number} timestamp - 时间戳
- * @returns {string} 格式化后的日期时间字符串
+ * 格式化日期时? * @param {number} timestamp - 时间? * @returns {string} 格式化后的日期时间字符串
  */
 function formatDate(timestamp) {
     if (!timestamp) {
@@ -2555,9 +2542,7 @@ function formatDate(timestamp) {
 
 /**
  * 转义HTML特殊字符
- * @param {string} value - 要转义的字符串
- * @returns {string} 转义后的字符串
- */
+ * @param {string} value - 要转义的字符? * @returns {string} 转义后的字符? */
 function escapeHtml(value) {
     return String(value)
         .replace(/&/g, "&amp;")
@@ -2568,8 +2553,7 @@ function escapeHtml(value) {
 }
 
 /**
- * 初始化主题
- */
+ * 初始化主? */
 function initializeTheme() {
     applyTheme(DEFAULT_THEME);
 }
@@ -2630,15 +2614,78 @@ function getThemeDefinition(themeName) {
     return THEME_DEFINITIONS.find((theme) => theme.id === themeName) || THEME_DEFINITIONS[0];
 }
 
+function setupAnalysisActionLayout() {
+    const actionBar = document.querySelector(".action-buttons");
+    if (
+        !actionBar ||
+        actionBar.dataset.layoutReady === "true" ||
+        !operationTypeFilters ||
+        !confirmBtn ||
+        !newAnalysisBtn ||
+        !rollbackBtn ||
+        !autoAnalyzeToggle ||
+        !cancelBtn
+    ) {
+        return;
+    }
+
+    const autoAnalyzeSwitch = autoAnalyzeToggle.closest(".toggle-switch");
+    if (!autoAnalyzeSwitch) {
+        return;
+    }
+
+    const filterGroup = document.createElement("div");
+    filterGroup.id = "operationFilterGroup";
+    filterGroup.className = "analysis-action-group analysis-filter-group";
+
+    const filterHeading = document.createElement("div");
+    filterHeading.className = "analysis-action-heading";
+    filterHeading.textContent = "Filters";
+
+    filterGroup.append(filterHeading, operationTypeFilters);
+
+    const actionStack = document.createElement("div");
+    actionStack.className = "analysis-action-stack";
+
+    const primaryGroup = document.createElement("div");
+    primaryGroup.className = "analysis-action-group analysis-primary-actions";
+
+    const primaryHeading = document.createElement("div");
+    primaryHeading.className = "analysis-action-heading";
+    primaryHeading.textContent = "Actions";
+
+    const primaryRow = document.createElement("div");
+    primaryRow.className = "analysis-button-row";
+    primaryRow.append(confirmBtn, newAnalysisBtn, rollbackBtn);
+    primaryGroup.append(primaryHeading, primaryRow);
+
+    const secondaryGroup = document.createElement("div");
+    secondaryGroup.className = "analysis-action-group analysis-secondary-actions";
+
+    const secondaryHeading = document.createElement("div");
+    secondaryHeading.className = "analysis-action-heading";
+    secondaryHeading.textContent = "Tools";
+
+    const secondaryRow = document.createElement("div");
+    secondaryRow.className = "analysis-button-row analysis-button-row-secondary";
+    secondaryRow.append(autoAnalyzeSwitch, cancelBtn);
+    secondaryGroup.append(secondaryHeading, secondaryRow);
+
+    actionStack.append(primaryGroup, secondaryGroup);
+    actionBar.replaceChildren(filterGroup, actionStack);
+    actionBar.dataset.layoutReady = "true";
+}
+setupAnalysisActionLayout();
+
 /**
  * 初始化应用
  */
-initializeWechatCleanupConfig(); // 初始化微信清理配置
+initializeWechatCleanupConfig();
 initializeAutoAnalyzePreference();
 initializeFolderInstructionMap();
-initializeTheme(); // 初始化主题
-renderExplorer(); // 渲染资源管理器
-renderEditor(); // 渲染编辑器
-renderAnalysis(); // 渲染分析结果
-updateActionState(); // 更新操作状态
-loadCloudSyncStatus(); // 加载云同步状态
+initializeTheme();
+renderExplorer();
+renderEditor();
+renderAnalysis();
+updateActionState();
+loadCloudSyncStatus();
