@@ -24,13 +24,13 @@ const FOLDER_INSTRUCTION_STORAGE_KEY = "openclaw-folder-instructions";
 const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
 const WECHAT_CLEANUP_MODE = "wechat_cleanup";
 
-/** 操作类型筛选配置：id -> { label, types[] } */
+/** 操作类型筛选配置：id -> { label, types[], tone }（tone 与 operation-type 的 CSS 类名一致） */
 const OPERATION_TYPE_FILTER_DEFS = [
-    { id: "move", label: "移动", types: ["move"] },
-    { id: "rename", label: "重命名文件", types: ["rename"] },
-    { id: "rename_folder", label: "重命名文件夹", types: ["rename_folder"] },
-    { id: "create_folder", label: "新建文件夹", types: ["create_folder"] },
-    { id: "delete", label: "删除", types: ["delete"] },
+    { id: "move", label: "移动", types: ["move"], tone: "move" },
+    { id: "rename", label: "重命名文件", types: ["rename"], tone: "rename" },
+    { id: "rename_folder", label: "重命名文件夹", types: ["rename_folder"], tone: "rename-folder" },
+    { id: "create_folder", label: "新建文件夹", types: ["create_folder"], tone: "create-folder" },
+    { id: "delete", label: "删除", types: ["delete"], tone: "delete" },
 ];
 
 /**
@@ -1592,9 +1592,10 @@ function renderOperationTypeFilters() {
     operationTypeFilters.innerHTML = OPERATION_TYPE_FILTER_DEFS.map((def) => {
         const anyEnabled = def.types.some((t) => state.enabledOperationTypes?.[t] !== false);
         const hasAnyOfType = operations.some((op) => def.types.includes(op?.type));
+        const toneClass = def.tone ? `tone-${def.tone}` : "";
         const className = hasAnyOfType
-            ? `operation-type-filter-chip ${anyEnabled ? "is-enabled" : "is-disabled"}`
-            : "operation-type-filter-chip is-empty";
+            ? `operation-type-filter-chip tone-${def.tone} ${anyEnabled ? "is-enabled" : "is-disabled"}`
+            : `operation-type-filter-chip tone-${def.tone} is-empty`;
         return `<button type="button" class="${className}" data-filter-id="${escapeHtml(def.id)}" title="${
             anyEnabled ? "点击熄灭：该类型将不可执行" : "点击点亮：该类型可执行"
         }">${escapeHtml(def.label)}</button>`;

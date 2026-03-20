@@ -1507,3 +1507,40 @@ README 已同步补充以下内容：
 ### 4. 涉及文件
 
 - [package.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package.json)
+
+---
+
+## 二十三、2026-03-20 操作类型筛选功能
+
+### 1. 功能概述
+
+在右侧“操作列表”区域的标题栏中新增操作类型筛选按钮，用户可通过点亮/熄灭各类型按钮，控制哪些操作可以执行：
+
+- **点亮**：该类型可执行，对应建议可单独确认或参与“确认全部”
+- **熄灭**：该类型不可执行，对应建议显示“已关闭”，无法单独确认
+- **确认全部**：仅执行点亮类型的建议，未点亮类型的待执行项会被直接丢弃（与无法完成的操作一样）
+
+### 2. 操作类型与颜色
+
+筛选按钮与每条建议左上角的操作类型徽章一一对应，底色保持一致：
+
+| 类型         | 说明           |
+|--------------|----------------|
+| 移动         | move           |
+| 重命名文件   | rename         |
+| 重命名文件夹 | rename_folder  |
+| 新建文件夹   | create_folder  |
+| 删除         | delete         |
+
+### 3. 布局与样式
+
+- 筛选按钮位于“操作列表”标题栏内，介于标题与“0 项”之间
+- 各按钮颜色与对应操作类型徽章一致（如 move 用 success 色、delete 用 danger 色）
+- 熄灭时保持同色但透明度降低、虚线边框
+- 当前方案不存在的类型以灰色显示（is-empty）
+
+### 4. 涉及文件
+
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
