@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Files - 项目介绍易拉宝</title>
+    <style>
+        :root {
+            --poster-width: 4724px;
+            --poster-height: 11811px;
+            --bg-1: #edf4ff;
+            --bg-2: #e6edf8;
+            --bg-3: #f7f9fd;
+            --panel: rgba(255, 255, 255, 0.72);
+            --panel-strong: rgba(255, 255, 255, 0.88);
+            --border: rgba(136, 153, 184, 0.22);
+            --text: #1f2430;
+            --text-muted: #617089;
+            --text-subtle: #8b97ad;
+            --blue: #2e7cf6;
+            --blue-strong: #1d63ce;
+            --shadow-lg: 0 48px 120px rgba(74, 93, 128, 0.18);
+            --shadow-md: 0 24px 56px rgba(84, 101, 132, 0.14);
+            --shadow-sm: 0 12px 26px rgba(84, 101, 132, 0.1);
+            --radius-xl: 68px;
+            --radius-lg: 44px;
+            --radius-md: 28px;
+            --radius-sm: 20px;
+            --font-ui: "SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI Variable", sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: var(--poster-width); min-height: var(--poster-height); }
+        body {
+            font-family: var(--font-ui);
+            color: var(--text);
+            background:
+                radial-gradient(circle at 10% 8%, rgba(113, 167, 255, 0.34), transparent 22%),
+                radial-gradient(circle at 90% 8%, rgba(255, 174, 194, 0.26), transparent 20%),
+                radial-gradient(circle at 75% 74%, rgba(116, 214, 197, 0.22), transparent 24%),
+                linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 42%, var(--bg-3) 100%);
+            overflow-x: hidden;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 180px),
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 180px);
+            opacity: 0.26;
+            mask: linear-gradient(180deg, rgba(0,0,0,0.58), transparent 88%);
+            -webkit-mask: linear-gradient(180deg, rgba(0,0,0,0.58), transparent 88%);
+        }
+
+        .poster {
+            width: var(--poster-width);
+            min-height: var(--poster-height);
+            padding: 120px 150px 110px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.02fr 0.98fr;
+            gap: 70px;
+            align-items: center;
+            margin-bottom: 52px;
+        }
+        .brand-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 34px;
+            padding: 20px 28px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.56);
+            border: 1px solid rgba(255,255,255,0.72);
+            box-shadow: var(--shadow-sm);
+            backdrop-filter: blur(26px) saturate(150%);
+        }
+        .lights { display: inline-flex; gap: 10px; }
+        .lights span { width: 18px; height: 18px; border-radius: 999px; }
+        .lights span:nth-child(1) { background: #ff5f57; }
+        .lights span:nth-child(2) { background: #febc2e; }
+        .lights span:nth-child(3) { background: #28c840; }
+        .brand-mark {
+            width: 86px;
+            height: 86px;
+            border-radius: 26px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, #67a6ff, #2d7cf5 58%, #1452c5);
+            color: #fff;
+            font-size: 34px;
+            font-weight: 760;
+            box-shadow: 0 22px 44px rgba(46,124,246,0.26);
+        }
+        .brand-copy small {
+            display: block;
+            font-size: 24px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--text-subtle);
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        .brand-copy strong {
+            display: block;
+            font-size: 42px;
+            letter-spacing: -.02em;
+        }
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            padding: 16px 26px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.58);
+            border: 1px solid rgba(255,255,255,0.7);
+            color: var(--text-muted);
+            font-size: 25px;
+            font-weight: 700;
+            box-shadow: var(--shadow-sm);
+        }
+        .eyebrow::before {
+            content: "";
+            width: 14px;
+            height: 14px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #59d499, #2ea86b);
+            box-shadow: 0 0 0 12px rgba(46,168,107,.12);
+        }
+        .hero h1 {
+            font-size: 132px;
+            line-height: 0.96;
+            letter-spacing: -0.065em;
+            margin-bottom: 28px;
+            font-weight: 790;
+        }
+        .hero h1 span {
+            display: block;
+            color: #5d6a80;
+            font-weight: 600;
+            margin-top: 18px;
+        }
+        .hero .lead {
+            font-size: 46px;
+            line-height: 1.52;
+            color: #44546a;
+            margin-bottom: 20px;
+        }
+        .hero .detail {
+            font-size: 31px;
+            line-height: 1.78;
+            color: var(--text-muted);
+            max-width: 1620px;
+        }
+        .hero-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 24px;
+            margin-top: 40px;
+        }
+        .metric {
+            padding: 28px 30px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.56);
+            border: 1px solid rgba(255,255,255,0.72);
+            box-shadow: var(--shadow-sm);
+        }
+        .metric strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 62px;
+            letter-spacing: -0.06em;
+        }
+        .metric span {
+            display: block;
+            font-size: 26px;
+            line-height: 1.58;
+            color: var(--text-muted);
+        }
+
+        .hero-visual { position: relative; min-height: 1380px; }
+        .hero-visual::before,
+        .hero-visual::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(56px);
+            opacity: .7;
+            pointer-events: none;
+        }
+        .hero-visual::before {
+            width: 420px;
+            height: 420px;
+            right: 10px;
+            top: 0;
+            background: rgba(93,151,255,.34);
+        }
+        .hero-visual::after {
+            width: 390px;
+            height: 390px;
+            left: 10px;
+            bottom: 80px;
+            background: rgba(255,157,189,.24);
+        }
+        .device {
+            position: absolute;
+            inset: 76px 28px 90px 34px;
+            padding: 22px;
+            border-radius: 54px;
+            background: rgba(255,255,255,.45);
+            border: 1px solid rgba(255,255,255,.62);
+            backdrop-filter: blur(28px);
+            box-shadow: var(--shadow-lg);
+        }
+        .device-frame {
+            overflow: hidden;
+            border-radius: 38px;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(138,153,180,.22);
+        }
+        .device-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            background: rgba(244,247,252,.88);
+            border-bottom: 1px solid rgba(158,170,194,.2);
+        }
+        .device-bar .title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #3b485b;
+        }
+        .device-bar .sub {
+            font-size: 18px;
+            color: var(--text-subtle);
+        }
+        .device img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .float-card {
+            position: absolute;
+            width: 470px;
+            padding: 24px 26px;
+            border-radius: 34px;
+            background: rgba(255,255,255,.66);
+            border: 1px solid rgba(255,255,255,.72);
+            box-shadow: var(--shadow-md);
+        }
+        .float-card small {
+            display: block;
+            margin-bottom: 12px;
+            font-size: 18px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--text-subtle);
+            font-weight: 800;
+        }
+        .float-card strong {
+            display: block;
+            font-size: 40px;
+            line-height: 1.28;
+            margin-bottom: 10px;
+            letter-spacing: -.04em;
+        }
+        .float-card p {
+            font-size: 22px;
+            line-height: 1.72;
+            color: var(--text-muted);
+        }
+        .float-card.top { top: 0; right: 0; }
+        .float-card.mid { left: 0; bottom: 190px; }
+        .float-card.bottom { right: 30px; bottom: 0; }
+
+        .section {
+            margin-top: 40px;
+            padding: 42px;
+            border-radius: var(--radius-xl);
+            background: var(--panel);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(28px) saturate(145%);
+            box-shadow: var(--shadow-lg);
+        }
+        .section-header {
+            max-width: 2200px;
+            margin-bottom: 24px;
+        }
+        .section-header small {
+            display: inline-block;
+            margin-bottom: 16px;
+            color: var(--text-subtle);
+            font-size: 22px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+        .section-header h2 {
+            font-size: 80px;
+            line-height: 1.02;
+            letter-spacing: -.05em;
+            margin-bottom: 10px;
+        }
+        .section-header p {
+            font-size: 29px;
+            line-height: 1.68;
+            color: var(--text-muted);
+        }
+        .pain-grid,
+        .solution-grid {
+            display: grid;
+            gap: 26px;
+        }
+        .pain-grid { grid-template-columns: 0.9fr 1.1fr; }
+        .solution-grid { grid-template-columns: 1.1fr 0.9fr; }
+        .origin-panel,
+        .pain-card,
+        .image-card,
+        .feature-card,
+        .step,
+        .scenario,
+        .footer-band {
+            border-radius: var(--radius-lg);
+            background: var(--panel-strong);
+            border: 1px solid rgba(255,255,255,.72);
+            box-shadow: var(--shadow-sm);
+        }
+        .origin-panel { padding: 28px; }
+        .origin-panel h3,
+        .image-copy strong,
+        .feature-card h3,
+        .step h3,
+        .scenario-copy h3 {
+            letter-spacing: -.04em;
+        }
+        .origin-panel h3 {
+            font-size: 58px;
+            line-height: 1.15;
+            margin-bottom: 18px;
+        }
+        .origin-panel p,
+        .pain-card p,
+        .image-copy p,
+        .pill span,
+        .feature-card p,
+        .step p,
+        .scenario-copy p,
+        .footer-band p {
+            font-size: 26px;
+            line-height: 1.74;
+            color: var(--text-muted);
+        }
+        .pain-cards,
+        .feature-grid,
+        .workflow,
+        .scenario-grid,
+        .showcase-grid,
+        .transform-grid,
+        .compare-grid {
+            display: grid;
+            gap: 22px;
+        }
+        .pain-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .workflow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .scenario-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .showcase-grid { grid-template-columns: 1.05fr 0.95fr; }
+        .transform-grid { grid-template-columns: 0.88fr 1.12fr; align-items: stretch; }
+        .compare-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .showcase-stack {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 22px;
+        }
+        .pain-card,
+        .feature-card,
+        .step { padding: 26px; }
+        .pain-card { min-height: 290px; }
+        .feature-card { min-height: 270px; }
+        .pain-no,
+        .step-index {
+            display: inline-grid;
+            place-items: center;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+        .pain-no {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 18px;
+            background: linear-gradient(180deg, #4f98ff, #2e7cf6);
+            color: #fff;
+            font-size: 26px;
+        }
+        .pain-card h4 {
+            font-size: 37px;
+            margin-bottom: 10px;
+            letter-spacing: -.04em;
+        }
+        .image-card { overflow: hidden; }
+        .image-card img,
+        .scenario img { display: block; width: 100%; }
+        .image-copy,
+        .scenario-copy { padding: 22px 24px 24px; }
+        .image-copy strong {
+            display: block;
+            font-size: 38px;
+            margin-bottom: 8px;
+        }
+        .solution-shot img {
+            height: 760px;
+            object-fit: cover;
+            object-position: top;
+        }
+        .showcase-large img {
+            height: 980px;
+            object-fit: cover;
+            object-position: top;
+        }
+        .showcase-small img {
+            height: 420px;
+            object-fit: cover;
+            object-position: top;
+        }
+        .pill-stack { display: grid; gap: 16px; }
+        .pill {
+            padding: 22px 24px;
+            border-radius: 24px;
+            background: rgba(243,247,253,.88);
+            border: 1px solid rgba(168,180,203,.18);
+            box-shadow: var(--shadow-sm);
+        }
+        .pill strong {
+            display: block;
+            font-size: 30px;
+            margin-bottom: 6px;
+        }
+        .feature-icon {
+            width: 66px;
+            height: 66px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 18px;
+            border-radius: 22px;
+            font-size: 30px;
+            background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(233,239,249,.94));
+        }
+        .feature-card h3,
+        .step h3,
+        .scenario-copy h3 { font-size: 36px; margin-bottom: 8px; }
+        .step {
+            position: relative;
+            overflow: hidden;
+        }
+        .step::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 8px;
+            background: linear-gradient(180deg, #6ca9ff, #4d81ff 55%, #58d8be);
+        }
+        .step-index {
+            width: 74px;
+            height: 74px;
+            margin-bottom: 18px;
+            background: rgba(46,124,246,.12);
+            color: var(--blue-strong);
+            font-size: 30px;
+        }
+        .scenario img { height: 500px; object-fit: cover; object-position: top; }
+        .compare-card {
+            overflow: hidden;
+            border-radius: var(--radius-lg);
+            background: var(--panel-strong);
+            border: 1px solid rgba(255,255,255,.72);
+            box-shadow: var(--shadow-sm);
+        }
+        .compare-card img {
+            display: block;
+            width: 100%;
+            height: 720px;
+            object-fit: cover;
+            object-position: top;
+        }
+        .compare-card .image-copy {
+            padding: 24px 26px 26px;
+        }
+        .footer-band {
+            margin-top: 40px;
+            padding: 40px 44px;
+            background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(242,247,255,.92));
+            box-shadow: var(--shadow-lg);
+        }
+        .footer-band small {
+            display: inline-block;
+            margin-bottom: 16px;
+            font-size: 22px;
+            color: var(--text-subtle);
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+        .footer-band h2 {
+            font-size: 76px;
+            line-height: 1.04;
+            letter-spacing: -.05em;
+            margin-bottom: 12px;
+        }
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-top: 28px;
+        }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 58px;
+            padding: 0 24px;
+            border-radius: 999px;
+            background: rgba(46,124,246,.1);
+            color: var(--blue-strong);
+            font-size: 24px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <main class="poster">
+        <section class="hero">
+            <div>
+                <div class="brand-row">
+                    <div class="lights"><span></span><span></span><span></span></div>
+                    <div class="brand-mark">OC</div>
+                    <div class="brand-copy">
+                        <small>OpenClaw Workspace</small>
+                        <strong>智能文件整理与云同步工作区</strong>
+                    </div>
+                </div>
+
+                <div class="eyebrow">项目介绍易拉宝</div>
+
+                <h1>
+                    让混乱文件夹
+                    <span>变成可执行、可回滚、可持续管理的工作区</span>
+                </h1>
+
+                <p class="lead">
+                    OpenClaw Files 不是传统“只会存取文件”的管理器，
+                    而是一个能看懂目录结构、给出整理建议、并安全执行的桌面工作区。
+                </p>
+                <p class="detail">
+                    我想解决的并不是“文件很多”本身，而是文件来源越来越杂、目录越来越乱、
+                    用户又缺少长期整理和云端同步习惯时，文件管理会逐渐失控的问题。
+                    这个项目尝试用 AI 分析 + 安全执行链路，把整理这件事变得更低门槛、更可信、更持续。
+                </p>
+
+                <div class="hero-metrics">
+                    <div class="metric">
+                        <strong>3 栏</strong>
+                        <span>资源树、文档预览、AI 分析与执行工作区同屏联动</span>
+                    </div>
+                    <div class="metric">
+                        <strong>可确认</strong>
+                        <span>先看建议，再决定执行；支持逐条确认、批量执行、失败丢弃</span>
+                    </div>
+                    <div class="metric">
+                        <strong>可回滚</strong>
+                        <span>每轮执行都有回滚链路，降低文件整理过程中的心理负担</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="device">
+                    <div class="device-frame">
+                        <div class="device-bar">
+                            <span class="title">OpenClaw Files Workspace</span>
+                            <span class="sub">主界面总览</span>
+                        </div>
+                        <img src="./screenshots/main-interface.png" alt="OpenClaw Files 主界面">
+                    </div>
+                </div>
+
+                <div class="float-card top">
+                    <small>Problem</small>
+                    <strong>文件不是不会保存，而是很难长期保持有序</strong>
+                    <p>下载目录、桌面临时文件、聊天接收文件、项目资料常常不断叠加，最终造成目录结构失控。</p>
+                </div>
+
+                <div class="float-card mid">
+                    <small>Design Goal</small>
+                    <strong>把“看不清、整理难、怕误操作”变成可视化流程</strong>
+                    <p>先扫描目录，再生成建议，再确认执行，并保留回滚能力，让整理过程更安全。</p>
+                </div>
+
+                <div class="float-card bottom">
+                    <small>Extension</small>
+                    <strong>整理之后，还要补上云同步这件事</strong>
+                    <p>很多用户没有形成长期云同步习惯，因此项目进一步接入百度网盘同步与定时任务能力。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Project Motivation</small>
+                <h2>我为什么想做这个项目</h2>
+                <p>
+                    文件整理的真实问题往往不是“不会建文件夹”，而是缺少一种能持续工作、足够安全、又足够低门槛的整理方式。
+                </p>
+            </div>
+
+            <div class="pain-grid">
+                <div class="origin-panel">
+                    <h3>从“目录越来越乱”出发，延伸到“本地文件缺乏长期管理习惯”</h3>
+                    <p>
+                        一旦文件规模大起来，纯手动整理就会很快变成重复劳动。
+                        下载、微信、项目文档、照片视频、临时压缩包都会不断堆积，
+                        最终让“找文件”和“敢不敢整理文件”都变成问题。
+                    </p>
+                </div>
+
+                <div class="pain-cards">
+                    <article class="pain-card">
+                        <div class="pain-no">01</div>
+                        <h4>目录结构失控</h4>
+                        <p>文件长期堆在下载、桌面、聊天接收目录里，分类不一致，后期检索成本越来越高。</p>
+                    </article>
+                    <article class="pain-card">
+                        <div class="pain-no">02</div>
+                        <h4>手动整理成本高</h4>
+                        <p>传统整理依赖逐个判断、逐个拖拽、逐个改名，耗时且容易误删、误移动。</p>
+                    </article>
+                    <article class="pain-card">
+                        <div class="pain-no">03</div>
+                        <h4>缺少持续同步习惯</h4>
+                        <p>很多用户偶尔会上传文件，但很少建立稳定、自动化、长期运行的云同步机制。</p>
+                    </article>
+                    <article class="pain-card">
+                        <div class="pain-no">04</div>
+                        <h4>专项文件更混杂</h4>
+                        <p>像微信接收文件这类场景，源目录和目标目录分散，重复文件多，手动清理更加困难。</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Solution</small>
+                <h2>我设计的不是“一个按钮全部整理”，而是一条可信的整理链路</h2>
+                <p>
+                    我把目录扫描、AI 方案生成、逐条确认、可回滚执行串成一条完整链路，
+                    让整理不再是一次高风险的黑盒操作。
+                </p>
+            </div>
+
+            <div class="solution-grid">
+                <article class="image-card solution-shot">
+                    <img src="./screenshots/suggestions.png" alt="整理建议面板">
+                    <div class="image-copy">
+                        <strong>右侧分析面板负责“把建议讲清楚”</strong>
+                        <p>
+                            系统会展示分析摘要、建议分类、可执行操作与执行结果，
+                            支持逐条确认、批量执行、失败自动丢弃以及最近一轮回滚。
+                        </p>
+                    </div>
+                </article>
+
+                <div class="pill-stack">
+                    <div class="pill">
+                        <strong>先扫描，再分析</strong>
+                        <span>基于真实目录树和文件索引生成建议，而不是只凭模糊描述输出一段文本。</span>
+                    </div>
+                    <div class="pill">
+                        <strong>先确认，再执行</strong>
+                        <span>每条建议都可以单独确认，也可以在看过总体方案后再批量执行。</span>
+                    </div>
+                    <div class="pill">
+                        <strong>执行失败可隔离</strong>
+                        <span>无法执行的建议会自动丢弃，不会因为个别冲突而拖垮整轮整理。</span>
+                    </div>
+                    <div class="pill">
+                        <strong>执行之后还能回滚</strong>
+                        <span>把“整理文件夹”从高风险操作，变成用户更愿意尝试的低门槛流程。</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Core Capabilities</small>
+                <h2>围绕真实使用场景构建的核心能力</h2>
+                <p>
+                    这个项目不只做“普通文件夹整理”，而是把高频痛点场景拆开处理，
+                    让工具既能覆盖日常目录，也能覆盖更复杂的专项清理与后续同步。
+                </p>
+            </div>
+
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <div class="feature-icon">📂</div>
+                    <h3>目录递归分析</h3>
+                    <p>扫描多级子目录，建立稳定的目录树和文件索引，为后续建议生成提供结构基础。</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI 整理建议生成</h3>
+                    <p>结合文件名、类型、目录结构和用户补充要求，生成更贴近真实使用习惯的整理方案。</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon">🧾</div>
+                    <h3>用户自定义整理要求</h3>
+                    <p>允许先补充“按年份归档”“保留原始合同”等偏好，再发起分析，提升方案匹配度。</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon">🔁</div>
+                    <h3>可确认执行与回滚</h3>
+                    <p>支持逐条确认、确认全部、失败自动丢弃和最近一轮回滚，降低用户操作顾虑。</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <h3>微信文件专项清理</h3>
+                    <p>将源目录与目标目录分离，按文件类型归档，自动识别重复文件，适配真实微信场景。</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon">☁️</div>
+                    <h3>百度网盘同步与定时任务</h3>
+                    <p>在整理完成后，继续把数据管理链路延伸到云端，补足长期同步和备份能力。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Workflow</small>
+                <h2>从打开文件夹到完成整理的完整流程</h2>
+                <p>
+                    我把产品交互设计成一条容易理解的操作链，尽量让用户每一步都知道当前系统在做什么。
+                </p>
+            </div>
+
+            <div class="workflow">
+                <article class="step">
+                    <div class="step-index">1</div>
+                    <h3>打开目录</h3>
+                    <p>读取当前文件夹结构，生成目录树和基础概览，必要时先补充用户整理要求。</p>
+                </article>
+                <article class="step">
+                    <div class="step-index">2</div>
+                    <h3>生成方案</h3>
+                    <p>由 OpenClaw 输出结构化整理摘要、建议分类与可执行操作列表。</p>
+                </article>
+                <article class="step">
+                    <div class="step-index">3</div>
+                    <h3>确认执行</h3>
+                    <p>逐条确认或批量执行，系统会记录结果、处理冲突，并自动丢弃无法执行的建议。</p>
+                </article>
+                <article class="step">
+                    <div class="step-index">4</div>
+                    <h3>回滚与同步</h3>
+                    <p>必要时回滚最近一轮变更；整理之后还能继续上传到网盘并建立定时同步任务。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Scenarios</small>
+                <h2>把能力落到三个最典型的应用场景中</h2>
+                <p>
+                    我希望这个项目既能作为通用文件整理工具，也能覆盖聊天文件、执行过程展示和同步管理这些更具体的场景。
+                </p>
+            </div>
+
+            <div class="scenario-grid">
+                <article class="scenario">
+                    <img src="./screenshots/prompt-panel.png" alt="Prompt 输入与自动分析">
+                    <div class="scenario-copy">
+                        <h3>整理前先说清楚规则</h3>
+                        <p>用户可以用自然语言补充整理偏好，让 AI 方案不只是“能整理”，而是更贴近自己的目录习惯。</p>
+                    </div>
+                </article>
+                <article class="scenario">
+                    <img src="./screenshots/wechat-settings.png" alt="微信文件清理">
+                    <div class="scenario-copy">
+                        <h3>微信文件专项归档</h3>
+                        <p>支持独立配置微信源目录与整理目标目录，适合处理来源混杂、重复多、长期堆积的聊天文件。</p>
+                    </div>
+                </article>
+                <article class="scenario">
+                    <img src="./screenshots/baidu_1.png" alt="百度网盘同步">
+                    <div class="scenario-copy">
+                        <h3>整理完成后继续同步到云端</h3>
+                        <p>在本地完成结构治理后，继续接入百度网盘上传和定时任务，让管理从“整理一次”走向“长期维护”。</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Showcase</small>
+                <h2>把“整理过程”做成用户看得懂、愿意用的界面</h2>
+                <p>
+                    我不仅关心功能是否可用，也关心用户是否能看懂当前状态、知道下一步怎么做。
+                </p>
+            </div>
+
+            <div class="showcase-grid">
+                <article class="image-card showcase-large">
+                    <img src="./screenshots/clear_process.png" alt="整理执行过程">
+                    <div class="image-copy">
+                        <strong>执行过程可见，结果变化可追踪</strong>
+                        <p>整理建议、执行状态、结果输出和回滚能力会在同一条工作链路中串起来，降低用户的不确定感。</p>
+                    </div>
+                </article>
+                <div class="showcase-stack">
+                    <article class="image-card showcase-small">
+                        <img src="./screenshots/prompt-panel.png" alt="Prompt 输入与自动分析">
+                        <div class="image-copy">
+                            <strong>先补充规则，再生成方案</strong>
+                            <p>用户可以先说明整理偏好，再决定什么时候发起分析。</p>
+                        </div>
+                    </article>
+                    <article class="image-card showcase-small">
+                        <img src="./screenshots/wechat-settings.png" alt="微信文件清理设置">
+                        <div class="image-copy">
+                            <strong>专项场景也有专门入口</strong>
+                            <p>像微信文件这类高频混乱场景，也能单独配置并进入专项整理流程。</p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <small>Before &amp; After</small>
+                <h2>真正重要的不是“分析过”，而是整理前后能看到清晰变化</h2>
+                <p>
+                    这也是我希望项目最终呈现给用户的价值：不是只给出一段建议文字，而是让目录结构真的变得更清晰、更好找、更容易继续维护。
+                </p>
+            </div>
+
+            <div class="transform-grid">
+                <div class="origin-panel">
+                    <h3>从杂乱堆积，走向可理解、可维护的目录结构</h3>
+                    <p>
+                        当用户能在整理前看见问题、在整理后看见结果，工具才真正建立起信任。
+                        这也是为什么我坚持把“分析、确认、执行、回滚、结果展示”做成一条完整链路。
+                    </p>
+                    <div class="tag-row">
+                        <span class="tag">整理前可核对</span>
+                        <span class="tag">整理后可追踪</span>
+                        <span class="tag">结构变化可解释</span>
+                        <span class="tag">结果更容易长期维护</span>
+                    </div>
+                </div>
+
+                <div class="compare-grid">
+                    <article class="compare-card">
+                        <img src="./screenshots/before_clear_normal.png" alt="整理前">
+                        <div class="image-copy">
+                            <strong>整理前：目录来源混杂、结构不清晰</strong>
+                            <p>下载文件、聊天文件、临时资料和项目文档堆在一起，后期查找和维护成本都很高。</p>
+                        </div>
+                    </article>
+                    <article class="compare-card">
+                        <img src="./screenshots/after_clear_normal.png" alt="整理后">
+                        <div class="image-copy">
+                            <strong>整理后：分类清楚，执行结果一目了然</strong>
+                            <p>按规则归档后的目录更容易理解，也更适合继续同步到云端，形成长期可持续的管理习惯。</p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="footer-band">
+            <small>Summary</small>
+            <h2>这个项目想做的，是把“文件整理”从一次性劳动，变成可以持续发生的数字管理流程。</h2>
+            <p>
+                它从一个很常见却长期被忽视的问题出发：文件夹不好整理，用户也没有持续整理和同步到云上的习惯。
+                因此我更关注的不是“能不能整理”，而是“用户愿不愿意开始整理、敢不敢执行整理、能不能把整理长期维持下去”。
+            </p>
+            <div class="tag-row">
+                <span class="tag">智能分析</span>
+                <span class="tag">结构化建议</span>
+                <span class="tag">确认执行</span>
+                <span class="tag">失败丢弃</span>
+                <span class="tag">最近回滚</span>
+                <span class="tag">微信清理</span>
+                <span class="tag">云端同步</span>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

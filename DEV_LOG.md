@@ -1602,3 +1602,62 @@ README was updated in the same round to reflect:
 ### 6. Verification
 
 - `node --check renderer.js`
+
+---
+
+## 25. 2026-03-21 Fix: Scheduled Baidu Netdisk Jobs Not Visible In-App
+### 1. Goal
+
+Fix the case where creating a Baidu Netdisk daily sync job succeeds, but the task still does not appear in the app's job list afterward.
+
+### 2. Symptom
+
+The user could successfully create a scheduled sync task from the app, and the actual cron job existed, but the OpenClaw Files UI continued showing an empty or stale task list.
+
+This created a misleading impression that the schedule had not been saved, even though later sync suggestions could still be generated normally.
+
+### 3. Root Cause
+
+Two issues overlapped:
+
+- the backend reused a short generic status timeout when calling OpenClaw `cron status` / `cron list`, which was sometimes not enough for job queries
+- the frontend fully relied on a follow-up cloud-status refresh, so if that refresh returned late or partial data, the newly created task would not be shown immediately
+
+### 4. Backend Fix
+
+The cloud sync backend now separates lightweight gateway probing from cron job querying:
+
+- add `cron_query_timeout_seconds`
+- use the longer timeout specifically for OpenClaw `cron status` and `cron list`
+- keep the shorter generic status timeout for the lightweight availability checks
+
+This makes task discovery more stable after schedule creation.
+
+### 5. Frontend Fix
+
+The renderer now improves task visibility in two ways:
+
+- raise the `/cloud/status` request timeout to 10 seconds for scheduled-job refreshes
+- when schedule creation succeeds and `response.data.job` is returned, merge that job into `state.cloudSyncStatus.jobs` immediately before the next refresh finishes
+
+This keeps the UI aligned with the actual creation result instead of waiting entirely on a second round-trip.
+
+### 6. README Sync
+
+README was updated in the same round to reflect:
+
+- newly created daily sync jobs now appear immediately in the in-app list
+- OpenClaw `cron` job queries use a dedicated longer timeout
+- the previous "created successfully but not visible" confusion has been addressed in the FAQ / recent changes notes
+
+### 7. Files
+
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 8. Verification
+
+- `python -m py_compile backend/cloud_sync.py backend/server.py`
+- `node --check renderer.js`

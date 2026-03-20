@@ -585,7 +585,7 @@ async function loadCloudSyncStatus() {
     updateActionState();
 
     try {
-        const response = await axios.post(`${API_BASE}/cloud/status`, {}, { timeout: 6000 });
+        const response = await axios.post(`${API_BASE}/cloud/status`, {}, { timeout: 10000 });
         if (response.data.success) {
             state.cloudSyncStatus = response.data;
             state.cloudSyncFeedback = null;
@@ -2073,6 +2073,24 @@ async function createBdpanSchedule() {
             message: buildCloudSyncMessage(response.data),
             at: Date.now(),
         };
+
+        if (response.data.success && response.data.job) {
+            const nextJobs = Array.isArray(state.cloudSyncStatus?.jobs)
+                ? state.cloudSyncStatus.jobs.filter((job) => job?.id !== response.data.job.id)
+                : [];
+            nextJobs.unshift(response.data.job);
+            state.cloudSyncStatus = {
+                ...(state.cloudSyncStatus || {}),
+                success: true,
+                jobs: nextJobs,
+                cron: {
+                    ...(state.cloudSyncStatus?.cron || {}),
+                    available: true,
+                    enabled: true,
+                },
+            };
+            renderCloudSyncPanel();
+        }
 
         if (response.data.timezone) {
             state.bdpanTimezone = response.data.timezone;

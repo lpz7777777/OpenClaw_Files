@@ -28,6 +28,10 @@ class CloudSyncManager:
             2,
             int(os.getenv("CLOUD_STATUS_PROBE_TIMEOUT", "3") or "3"),
         )
+        self.cron_query_timeout_seconds = max(
+            self.status_probe_timeout_seconds,
+            int(os.getenv("CLOUD_CRON_QUERY_TIMEOUT", "8") or "8"),
+        )
         self.openclaw_cli_path = self.gateway_client.openclaw_cli_path
         self.bdpan_runtime = CommandRuntime.resolve(
             command_name="bdpan",
@@ -637,7 +641,7 @@ class CloudSyncManager:
 
             result = self.gateway_client.run_openclaw_cli(
                 command_args,
-                timeout=self.status_probe_timeout_seconds,
+                timeout=self.cron_query_timeout_seconds,
             )
         except Exception as exc:
             return {
@@ -682,7 +686,7 @@ class CloudSyncManager:
 
             result = self.gateway_client.run_openclaw_cli(
                 command_args,
-                timeout=self.status_probe_timeout_seconds,
+                timeout=self.cron_query_timeout_seconds,
             )
         except Exception:
             return []

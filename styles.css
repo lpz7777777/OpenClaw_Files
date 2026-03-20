@@ -2090,14 +2090,19 @@ body[data-theme="mac"] .app-shell {
 
 body[data-theme="mac"] .topbar {
     position: relative;
-    padding-left: 88px;
+    padding-left: 22px;
 }
 
-body[data-theme="mac"] .topbar::before {
+body[data-theme="mac"] .brand-block {
+    position: relative;
+    padding-top: 22px;
+}
+
+body[data-theme="mac"] .brand-block::before {
     content: "";
     position: absolute;
-    left: 24px;
-    top: 24px;
+    left: 0;
+    top: 0;
     width: 12px;
     height: 12px;
     border-radius: 999px;
@@ -2460,8 +2465,7 @@ body[data-theme="petal"] .primary-btn {
         padding-left: 22px;
     }
 
-    body[data-theme="mac"] .topbar::before {
-        left: 18px;
-        top: 18px;
+    body[data-theme="mac"] .brand-block {
+        padding-top: 20px;
     }
 }
