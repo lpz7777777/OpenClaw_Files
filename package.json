@@ -30,6 +30,7 @@
       "main.js",
       "renderer.js",
       "styles.css",
+      "assets",
       "README.md",
       "OPENCLAW_GATEWAY.md",
       ".env.example",

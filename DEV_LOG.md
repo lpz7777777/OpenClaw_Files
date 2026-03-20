@@ -1484,3 +1484,26 @@ README 已同步补充以下内容：
 
 - `node --check renderer.js`
 - `python -m py_compile backend/server.py backend/file_analyzer.py`
+
+---
+
+## 二十二、2026-03-20 修复：Release 安装包图标缺失
+
+### 1. 现象
+
+用户反馈：通过 release 安装包安装后运行，出现：
+
+- 微信清理按钮图标缺失
+- 资源管理器中各文件类型图标（Word、PDF、Excel、PPT、ZIP 等）缺失
+
+### 2. 原因
+
+`package.json` 的 `build.files` 仅包含 `index.html`、`main.js`、`renderer.js`、`styles.css` 等，未包含 `assets` 目录。electron-builder 打包时只将 `files` 中列出的内容打入 asar，导致 `assets/icons/` 下的图片资源未被打包。
+
+### 3. 修改
+
+在 [package.json](package.json) 的 `build.files` 中新增 `"assets"` 条目，使打包时包含 `assets` 目录及其子目录（含 `assets/icons/*.png`）。
+
+### 4. 涉及文件
+
+- [package.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package.json)
