@@ -1443,6 +1443,54 @@ button:disabled {
     background: var(--accent);
 }
 
+.operation-type-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.operation-type-filters.is-empty {
+    display: none;
+}
+
+.operation-type-filter-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.operation-type-filter-chip.is-enabled {
+    border-color: rgba(47, 122, 107, 0.35);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.operation-type-filter-chip.is-enabled:hover {
+    background: #d3e7e1;
+}
+
+.operation-type-filter-chip.is-disabled {
+    opacity: 0.6;
+    border-style: dashed;
+}
+
+.operation-type-filter-chip.is-disabled:hover {
+    opacity: 1;
+    background: var(--bg-hover);
+}
+
+.operation-type-filter-chip.is-empty {
+    opacity: 0.4;
+    cursor: default;
+}
+
 .operations-list {
     display: flex;
     flex-direction: column;
@@ -1462,6 +1510,11 @@ button:disabled {
 
 .operation-item.is-discarded {
     background: #fbf4eb;
+}
+
+.operation-item.is-type-disabled {
+    opacity: 0.7;
+    background: var(--bg-panel);
 }
 
 .operation-topline {
@@ -1549,6 +1602,12 @@ button:disabled {
     border-color: rgba(154, 100, 45, 0.18);
     background: var(--warning-soft);
     color: var(--warning);
+}
+
+.operation-status-badge.is-type-disabled {
+    border-color: var(--border);
+    background: var(--bg-panel);
+    color: var(--text-muted);
 }
 
 .operation-paths {

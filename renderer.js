@@ -24,6 +24,15 @@ const FOLDER_INSTRUCTION_STORAGE_KEY = "openclaw-folder-instructions";
 const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
 const WECHAT_CLEANUP_MODE = "wechat_cleanup";
 
+/** 操作类型筛选配置：id -> { label, types[] } */
+const OPERATION_TYPE_FILTER_DEFS = [
+    { id: "move", label: "移动", types: ["move"] },
+    { id: "rename", label: "重命名文件", types: ["rename"] },
+    { id: "rename_folder", label: "重命名文件夹", types: ["rename_folder"] },
+    { id: "create_folder", label: "新建文件夹", types: ["create_folder"] },
+    { id: "delete", label: "删除", types: ["delete"] },
+];
+
 /**
  * 主题定义
  */
@@ -115,6 +124,10 @@ const state = {
         sourcePath: "",
         targetPath: "",
     },
+    /** 操作类型是否可执行，默认全部点亮 */
+    enabledOperationTypes: Object.fromEntries(
+        OPERATION_TYPE_FILTER_DEFS.flatMap((def) => def.types.map((t) => [t, true]))
+    ),
 };
 
 /**
@@ -140,6 +153,7 @@ const analysisMeta = document.getElementById("analysisMeta"); // 分析元信息
 const planSummary = document.getElementById("planSummary"); // 计划摘要
 const categoriesList = document.getElementById("categoriesList"); // 分类列表
 const operationsMeta = document.getElementById("operationsMeta"); // 操作元信息
+const operationTypeFilters = document.getElementById("operationTypeFilters"); // 操作类型筛选按钮
 const operationsList = document.getElementById("operationsList"); // 操作列表
 const resultDisplay = document.getElementById("resultDisplay"); // 结果显示
 const gatewayStatusPill = document.getElementById("gatewayStatusPill"); // Gateway 状态胶囊
@@ -276,22 +290,39 @@ newAnalysisBtn.addEventListener("click", async () => {
  */
 confirmBtn.addEventListener("click", async () => {
     const pending = getPendingOperations();
-    if (pending.length === 0) {
+    const pendingAll = getPendingOperationsUnfiltered();
+    if (pending.length === 0 && pendingAll.length === 0) {
         setAnalysisStatus("error", "当前没有可执行的整理建议。");
         renderAnalysis();
         return;
     }
 
-    const confirmed = window.confirm(`确定要一次性执行剩余的 ${pending.length} 条建议吗？`);
+    const disabledCount = pendingAll.length - pending.length;
+    const confirmMsg =
+        disabledCount > 0
+            ? `确定要一次性执行 ${pending.length} 条建议吗？另有 ${disabledCount} 条（未点亮的操作类型）将被直接丢弃。`
+            : `确定要一次性执行剩余的 ${pending.length} 条建议吗？`;
+    const confirmed = window.confirm(confirmMsg);
     if (!confirmed) {
         return;
     }
 
-    await executeOperations(
-        pending.map(({ index }) => index),
-        `正在执行剩余的 ${pending.length} 条操作，请稍候...`,
-        { writeReadme: state.analysisMode !== WECHAT_CLEANUP_MODE }
-    );
+    const disabledIndexes = pendingAll
+        .filter(({ operation }) => !isOperationTypeEnabled(operation?.type))
+        .map(({ index }) => index);
+    disabledIndexes.forEach((idx) => state.discardedOperationIndexes.add(idx));
+
+    if (pending.length > 0) {
+        await executeOperations(
+            pending.map(({ index }) => index),
+            `正在执行剩余的 ${pending.length} 条操作，请稍候...`,
+            { writeReadme: state.analysisMode !== WECHAT_CLEANUP_MODE }
+        );
+    } else {
+        setAnalysisStatus("warning", `已丢弃 ${disabledCount} 条未点亮类型的建议，无其他可执行操作。`);
+        renderAnalysis();
+        updateActionState();
+    }
 });
 
 /**
@@ -1308,6 +1339,8 @@ function renderAnalysis() {
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
     operationsMeta.textContent = `${getPendingOperations().length}/${operations.length} 待执行`;
 
+    renderOperationTypeFilters();
+
     if (operations.length > 0) {
         operationsList.className = "operations-list";
         operationsList.innerHTML = operations
@@ -1541,6 +1574,46 @@ function renderCloudSyncPanel() {
     }
 }
 
+function isOperationTypeEnabled(opType) {
+    return Boolean(state.enabledOperationTypes?.[opType] !== false);
+}
+
+function renderOperationTypeFilters() {
+    const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
+    const hasOps = operations.length > 0;
+
+    if (!hasOps) {
+        operationTypeFilters.className = "operation-type-filters is-empty";
+        operationTypeFilters.innerHTML = "";
+        return;
+    }
+
+    operationTypeFilters.className = "operation-type-filters";
+    operationTypeFilters.innerHTML = OPERATION_TYPE_FILTER_DEFS.map((def) => {
+        const anyEnabled = def.types.some((t) => state.enabledOperationTypes?.[t] !== false);
+        const hasAnyOfType = operations.some((op) => def.types.includes(op?.type));
+        const className = hasAnyOfType
+            ? `operation-type-filter-chip ${anyEnabled ? "is-enabled" : "is-disabled"}`
+            : "operation-type-filter-chip is-empty";
+        return `<button type="button" class="${className}" data-filter-id="${escapeHtml(def.id)}" title="${
+            anyEnabled ? "点击熄灭：该类型将不可执行" : "点击点亮：该类型可执行"
+        }">${escapeHtml(def.label)}</button>`;
+    }).join("");
+
+    operationTypeFilters.querySelectorAll("[data-filter-id]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const def = OPERATION_TYPE_FILTER_DEFS.find((d) => d.id === btn.dataset.filterId);
+            if (!def) return;
+            const next = def.types.some((t) => state.enabledOperationTypes?.[t] !== false) ? false : true;
+            def.types.forEach((t) => {
+                state.enabledOperationTypes[t] = next;
+            });
+            renderAnalysis();
+            updateActionState();
+        });
+    });
+}
+
 function getOperationMeta(operation) {
     switch (operation?.type) {
         case "move":
@@ -1562,17 +1635,20 @@ function renderOperationItem(operation, index) {
     const operationMeta = getOperationMeta(operation);
     const isCompleted = isOperationCompleted(index);
     const isDiscarded = isOperationDiscarded(index);
+    const typeEnabled = isOperationTypeEnabled(operation?.type);
     const sourceMarkup = operation.source
         ? `<div><span>${operationMeta.sourceLabel}</span><code>${escapeHtml(operation.source || "")}</code></div>`
         : "";
     const targetMarkup = operation.target
         ? `<div><span>${operationMeta.targetLabel}</span><code>${escapeHtml(operation.target || "")}</code></div>`
         : "";
-    const itemStateClass = isCompleted ? "is-completed" : isDiscarded ? "is-discarded" : "";
+    const itemStateClass = isCompleted ? "is-completed" : isDiscarded ? "is-discarded" : !typeEnabled ? "is-type-disabled" : "";
     const actionMarkup = isCompleted
         ? '<span class="operation-status-badge">已执行</span>'
         : isDiscarded
         ? '<span class="operation-status-badge is-discarded">已丢弃</span>'
+        : !typeEnabled
+        ? '<span class="operation-status-badge is-type-disabled">已关闭</span>'
         : `<button type="button" class="operation-confirm-btn" data-operation-index="${index}" ${
               state.isExecutingOperation ? "disabled" : ""
           }>确认这条</button>`;
@@ -1861,6 +1937,7 @@ function updatePendingOperationsAfterExecution(executedOperations) {
 function updateActionState() {
     const hasFolder = Boolean(state.currentFolderPath);
     const operationCount = getPendingOperations().length;
+    const pendingTotalCount = getPendingOperationsUnfiltered().length;
     const isBusy = state.isAnalyzing || state.isExecutingOperation || state.isCloudSyncBusy;
     const hasRemotePath = Boolean(String(state.bdpanRemotePath || "").trim());
     const hasDailyTime = Boolean(String(state.bdpanDailyTime || "").trim());
@@ -1870,7 +1947,7 @@ function updateActionState() {
     wechatCleanupBtn.disabled = isBusy;
     analyzeBtn.disabled = !hasFolder || isBusy;
     newAnalysisBtn.disabled = !hasFolder || isBusy;
-    confirmBtn.disabled = isBusy || operationCount === 0;
+    confirmBtn.disabled = isBusy || pendingTotalCount === 0;
     rollbackBtn.disabled = isBusy || !state.canRollback;
     cancelBtn.disabled = isBusy || (!state.currentPlan && !state.lastResult);
     bdpanUploadBtn.disabled = !hasFolder || isBusy || !hasRemotePath;
@@ -2285,14 +2362,22 @@ async function executeOperations(indexes, loadingMessage, options = {}) {
 }
 
 /**
- * 获取待执行的操作
+ * 获取待执行的操作（不含类型筛选，仅排除已处理）
  * @returns {Array} 待执行操作数组
  */
-function getPendingOperations() {
+function getPendingOperationsUnfiltered() {
     const operations = Array.isArray(state.currentPlan?.operations) ? state.currentPlan.operations : [];
     return operations
         .map((operation, index) => ({ operation, index }))
         .filter(({ index }) => !isOperationHandled(index));
+}
+
+/**
+ * 获取待执行的操作（仅含已点亮类型的、未完成的）
+ * @returns {Array} 待执行操作数组
+ */
+function getPendingOperations() {
+    return getPendingOperationsUnfiltered().filter(({ operation }) => isOperationTypeEnabled(operation?.type));
 }
 
 /**
