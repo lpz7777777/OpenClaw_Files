@@ -1661,3 +1661,64 @@ README was updated in the same round to reflect:
 
 - `python -m py_compile backend/cloud_sync.py backend/server.py`
 - `node --check renderer.js`
+
+---
+
+## 26. 2026-03-21 Update: Top Status Refresh Button And Tighter Filter Chips
+### 1. Goal
+
+Refine two small but highly visible demo-facing UI details:
+
+- make the five operation-type filter buttons tighter so they are more likely to fit on one desktop row
+- add a refresh entry directly inside the top Gateway / task-summary module, so OpenClaw connection state can be rechecked without scrolling down
+
+### 2. Top Status Refresh Entry
+
+The top status block already summarized:
+
+- Gateway availability
+- gateway detail text
+- app-created scheduled jobs
+
+But users still had to go to the Baidu Netdisk area below to trigger a status refresh.
+
+This round adds:
+
+- a new `gatewayRefreshBtn` in the top status module
+- a click handler that reuses the existing `loadCloudSyncStatus()`
+- the same disabled/loading state rules used by the cloud-sync refresh button
+
+This avoids introducing a second status-refresh pathway and keeps topbar status and cloud panel status synchronized.
+
+### 3. Filter Chip Tightening
+
+The earlier bottom-toolbar reflow already moved operation-type filters into the `Filter / Actions / Tools` area. The next refinement was to make those chips narrower.
+
+The stylesheet now further reduces their footprint:
+
+- chip gap reduced from `6px` to `4px`
+- chip padding reduced
+- font size reduced from `11px` to `10px`
+- font weight and letter spacing tightened slightly
+
+Overflow support is still preserved as a fallback, but on common desktop widths the filters are now much more likely to stay on one visible row without horizontal dragging.
+
+### 4. README Sync
+
+README was updated in the same round to reflect:
+
+- the new topbar "刷新状态" button
+- the fact that top refresh and cloud refresh share the same state-loading logic
+- the tighter desktop presentation of the five filter chips
+
+### 5. Files
+
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [renderer.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/renderer.js)
+- [styles.css](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/styles.css)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 6. Verification
+
+- `node --check renderer.js`
