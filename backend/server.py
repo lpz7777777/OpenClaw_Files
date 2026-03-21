@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from cloud_sync import CloudSyncManager
 from file_analyzer import FileAnalyzer
+from showcase_plan import get_showcase_analysis
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -47,10 +48,20 @@ class RequestHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
         data = json.loads(post_data.decode("utf-8"))
-        analyzer, analyzer_error = self.get_analyzer()
-        cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
 
         if self.path == "/analyze":
+            if bool(data.get("demo_mode")):
+                result = get_showcase_analysis(
+                    data.get("folder_path"),
+                    mode=data.get("mode"),
+                    target_root_path=data.get("target_root_path"),
+                    user_requests=data.get("user_requests"),
+                )
+                self._set_headers()
+                self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+                return
+
+            analyzer, analyzer_error = self.get_analyzer()
             if analyzer_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -76,6 +87,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/execute":
+            analyzer, analyzer_error = self.get_analyzer()
             if analyzer_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -108,6 +120,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/rollback":
+            analyzer, analyzer_error = self.get_analyzer()
             if analyzer_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -130,6 +143,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/cloud/status":
+            cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
             if cloud_sync_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -146,6 +160,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/cloud/upload":
+            cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
             if cloud_sync_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -168,6 +183,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/cloud/schedule":
+            cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
             if cloud_sync_error:
                 self._set_headers(500)
                 self.wfile.write(
@@ -199,6 +215,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/cloud/schedule/remove":
+            cloud_sync_manager, cloud_sync_error = self.get_cloud_sync_manager()
             if cloud_sync_error:
                 self._set_headers(500)
                 self.wfile.write(

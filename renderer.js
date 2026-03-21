@@ -20,6 +20,7 @@ const WORD_EXTENSIONS = new Set([".doc", ".docx"]);
 const EXCEL_EXTENSIONS = new Set([".xls", ".xlsx", ".csv"]);
 const THEME_STORAGE_KEY = "openclaw-workspace-theme";
 const AUTO_ANALYZE_STORAGE_KEY = "openclaw-auto-analyze-on-open";
+const DEMO_MODE_STORAGE_KEY = "openclaw-showcase-demo-mode";
 const FOLDER_INSTRUCTION_STORAGE_KEY = "openclaw-folder-instructions";
 const WECHAT_CLEANUP_STORAGE_KEY = "openclaw-wechat-cleanup-config";
 const WECHAT_CLEANUP_MODE = "wechat_cleanup";
@@ -116,6 +117,9 @@ const state = {
     analysisMode: "standard",
     analysisTargetRootPath: "",
     autoAnalyzeOnOpen: true,
+    demoModeEnabled: false,
+    demoModeApplied: false,
+    demoModeLabel: "",
     folderInstructionMap: {},
     currentFolderInstructions: [],
     instructionDraft: "",
@@ -157,6 +161,7 @@ const operationsList = document.getElementById("operationsList");
 const resultDisplay = document.getElementById("resultDisplay"); // 结果显示
 const gatewayStatusPill = document.getElementById("gatewayStatusPill");
 const gatewayStatusText = document.getElementById("gatewayStatusText");
+const gatewayRefreshBtn = document.getElementById("gatewayRefreshBtn");
 const topbarJobsChips = document.getElementById("topbarJobsChips");
 const bdpanMeta = document.getElementById("bdpanMeta");
 const bdpanStatusCard = document.getElementById("bdpanStatusCard");
@@ -170,6 +175,7 @@ const bdpanJobsList = document.getElementById("bdpanJobsList"); // 百度网盘�
 const confirmBtn = document.getElementById("confirmBtn"); // 确认按钮
 const newAnalysisBtn = document.getElementById("newAnalysisBtn"); // 重新分析按钮
 const rollbackBtn = document.getElementById("rollbackBtn"); // 回滚按钮
+const demoModeToggle = document.getElementById("demoModeToggle");
 const cancelBtn = document.getElementById("cancelBtn"); // 取消按钮
 const autoAnalyzeToggle = document.getElementById("autoAnalyzeToggle");
 const wechatCleanupDialog = document.getElementById("wechatCleanupDialog"); // 微信清理弹窗
@@ -195,6 +201,15 @@ themeSelect.addEventListener("change", (event) => {
 autoAnalyzeToggle.addEventListener("change", (event) => {
     state.autoAnalyzeOnOpen = Boolean(event.target.checked);
     localStorage.setItem(AUTO_ANALYZE_STORAGE_KEY, String(state.autoAnalyzeOnOpen));
+    updateActionState();
+});
+
+demoModeToggle.addEventListener("change", (event) => {
+    state.demoModeEnabled = Boolean(event.target.checked);
+    localStorage.setItem(DEMO_MODE_STORAGE_KEY, String(state.demoModeEnabled));
+    state.demoModeApplied = false;
+    state.demoModeLabel = "";
+    renderAnalysis();
     updateActionState();
 });
 
@@ -269,7 +284,7 @@ analyzeBtn.addEventListener("click", async () => {
         return;
     }
 
-    await analyzeFolder(state.currentFolderPath);
+    await analyzeFolder(state.currentFolderPath, { simulateDemoDelay: true });
 });
 
 /**
@@ -280,7 +295,7 @@ newAnalysisBtn.addEventListener("click", async () => {
         return;
     }
 
-    await analyzeFolder(state.currentFolderPath);
+    await analyzeFolder(state.currentFolderPath, { simulateDemoDelay: true });
 });
 
 /**
@@ -385,6 +400,10 @@ bdpanRefreshBtn.addEventListener("click", async () => {
     await loadCloudSyncStatus();
 });
 
+gatewayRefreshBtn.addEventListener("click", async () => {
+    await loadCloudSyncStatus();
+});
+
 bdpanScheduleBtn.addEventListener("click", async () => {
     await createBdpanSchedule();
 });
@@ -446,6 +465,8 @@ async function openFolder(folderPath, options = {}) {
     state.cloudSyncFeedback = null;
     state.analysisMode = analysisMode;
     state.analysisTargetRootPath = analysisMode === WECHAT_CLEANUP_MODE ? targetRootPath : "";
+    state.demoModeApplied = false;
+    state.demoModeLabel = "";
     state.currentFolderInstructions = getFolderInstructionMessages(folderPath);
     state.instructionDraft = "";
     initializeBdpanDefaults(folderPath);
@@ -644,6 +665,7 @@ async function loadFolderTree(folderPath, preserveTabs = true) {
 
 async function analyzeFolder(folderPath, options = {}) {
     const mode = options.mode || state.analysisMode || "standard";
+    const simulateDemoDelay = Boolean(options.simulateDemoDelay);
     const targetRootPath =
         mode === WECHAT_CLEANUP_MODE
             ? String(options.targetRootPath || state.analysisTargetRootPath || "").trim()
@@ -656,6 +678,8 @@ async function analyzeFolder(folderPath, options = {}) {
     state.canRollback = false;
     state.analysisMode = mode;
     state.analysisTargetRootPath = targetRootPath;
+    state.demoModeApplied = false;
+    state.demoModeLabel = "";
     selectedPath.textContent = buildSelectedPathText();
     setAnalysisStatus(
         "loading",
@@ -672,10 +696,16 @@ async function analyzeFolder(folderPath, options = {}) {
             mode,
             target_root_path: targetRootPath,
             user_requests: userRequests,
+            demo_mode: state.demoModeEnabled,
         });
 
         if (response.data.success) {
+            if (simulateDemoDelay && state.demoModeEnabled && response.data.demo_mode) {
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+            }
             state.currentPlan = response.data.plan;
+            state.demoModeApplied = Boolean(response.data.demo_mode);
+            state.demoModeLabel = String(response.data.demo_label || "").trim();
             setAnalysisStatus(
                 "success",
                 mode === WECHAT_CLEANUP_MODE
@@ -684,9 +714,13 @@ async function analyzeFolder(folderPath, options = {}) {
             );
             openOverviewTab();
         } else {
+            state.demoModeApplied = Boolean(response.data.demo_mode);
+            state.demoModeLabel = String(response.data.demo_label || "").trim();
             setAnalysisStatus("error", `Analysis failed: ${response.data.error}`);
         }
     } catch (error) {
+        state.demoModeApplied = false;
+        state.demoModeLabel = "";
         setAnalysisStatus("error", `无法连接到后端服务：${error.message}`);
     }
 
@@ -1314,7 +1348,8 @@ function renderAnalysis() {
         analysisMeta.textContent = "执行中";
     } else {
         const modeLabel = state.analysisMode === WECHAT_CLEANUP_MODE ? "微信清理" : "标准整理";
-        analysisMeta.textContent = `${modeLabel} · ${getPendingOperations().length} 项待执行 · ${state.treeStats.files} 个文件`;
+        const demoLabel = state.demoModeApplied ? `${state.demoModeLabel || "展示模式"} · ` : "";
+        analysisMeta.textContent = `${demoLabel}${modeLabel} · ${getPendingOperations().length} 项待执行 · ${state.treeStats.files} 个文件`;
     }
 
     if (state.currentPlan) {
@@ -1393,6 +1428,7 @@ function getJobDisplayName(job) {
 function renderTopbarCloudSummary(status, jobs) {
     const gateway = status?.gateway || {};
     const gatewayOk = Boolean(gateway.ok);
+    gatewayRefreshBtn.textContent = state.isCloudSyncLoading ? "\u5237\u65b0\u4e2d..." : "\u5237\u65b0\u72b6\u6001";
 
     if (state.isCloudSyncLoading && !status) {
         gatewayStatusPill.className = "sync-status-pill neutral";
@@ -1953,10 +1989,12 @@ function updateActionState() {
     cancelBtn.disabled = isBusy || (!state.currentPlan && !state.lastResult);
     bdpanUploadBtn.disabled = !hasFolder || isBusy || !hasRemotePath;
     bdpanRefreshBtn.disabled = state.isCloudSyncBusy || state.isCloudSyncLoading;
+    gatewayRefreshBtn.disabled = state.isCloudSyncBusy || state.isCloudSyncLoading;
     bdpanScheduleBtn.disabled = !hasFolder || isBusy || !hasRemotePath || !hasDailyTime || !hasTimezone;
     wechatCleanupRunBtn.disabled = isBusy;
     sendInstructionBtn.disabled = !hasFolder || isBusy || !hasInstructionDraft;
     autoAnalyzeToggle.disabled = isBusy;
+    demoModeToggle.disabled = isBusy;
 }
 
 /**
@@ -2582,6 +2620,11 @@ function initializeAutoAnalyzePreference() {
     autoAnalyzeToggle.checked = state.autoAnalyzeOnOpen;
 }
 
+function initializeDemoModePreference() {
+    state.demoModeEnabled = localStorage.getItem(DEMO_MODE_STORAGE_KEY) === "true";
+    demoModeToggle.checked = state.demoModeEnabled;
+}
+
 function initializeFolderInstructionMap() {
     try {
         const storedValue = JSON.parse(localStorage.getItem(FOLDER_INSTRUCTION_STORAGE_KEY) || "{}");
@@ -2641,14 +2684,16 @@ function setupAnalysisActionLayout() {
         !confirmBtn ||
         !newAnalysisBtn ||
         !rollbackBtn ||
+        !demoModeToggle ||
         !autoAnalyzeToggle ||
         !cancelBtn
     ) {
         return;
     }
 
+    const demoModeSwitch = demoModeToggle.closest(".toggle-switch");
     const autoAnalyzeSwitch = autoAnalyzeToggle.closest(".toggle-switch");
-    if (!autoAnalyzeSwitch) {
+    if (!demoModeSwitch || !autoAnalyzeSwitch) {
         return;
     }
 
@@ -2686,7 +2731,7 @@ function setupAnalysisActionLayout() {
 
     const secondaryRow = document.createElement("div");
     secondaryRow.className = "analysis-button-row analysis-button-row-secondary";
-    secondaryRow.append(autoAnalyzeSwitch, cancelBtn);
+    secondaryRow.append(demoModeSwitch, autoAnalyzeSwitch, cancelBtn);
     secondaryGroup.append(secondaryHeading, secondaryRow);
 
     actionStack.append(primaryGroup, secondaryGroup);
@@ -2700,6 +2745,7 @@ setupAnalysisActionLayout();
  */
 initializeWechatCleanupConfig();
 initializeAutoAnalyzePreference();
+initializeDemoModePreference();
 initializeFolderInstructionMap();
 initializeTheme();
 renderExplorer();

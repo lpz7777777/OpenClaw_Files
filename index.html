@@ -23,6 +23,7 @@
                     <span id="gatewayStatusText" class="gateway-status-text">
                         正在检查 OpenClaw Gateway 和本应用创建的定时任务...
                     </span>
+                    <button id="gatewayRefreshBtn" class="ghost-btn gateway-refresh-btn" type="button">&#21047;&#26032;&#29366;&#24577;</button>
                 </div>
 
                 <div class="topbar-jobs">
@@ -241,6 +242,11 @@
                     <button id="confirmBtn" class="primary-btn">确认全部</button>
                     <button id="newAnalysisBtn" class="secondary-btn">重新生成</button>
                     <button id="rollbackBtn" class="warning-btn">回滚</button>
+                    <label class="toggle-switch" for="demoModeToggle" title="打开后，标准整理会对预设展示目录直接返回固定方案，不再调用 OpenClaw。">
+                        <input id="demoModeToggle" type="checkbox">
+                        <span class="toggle-switch-track" aria-hidden="true"></span>
+                        <span class="toggle-switch-text">展示模式</span>
+                    </label>
                     <label class="toggle-switch" for="autoAnalyzeToggle" title="打开后，选择文件夹会自动开始分析；关闭后，需要手动点击重新生成。">
                         <input id="autoAnalyzeToggle" type="checkbox" checked>
                         <span class="toggle-switch-track" aria-hidden="true"></span>

@@ -358,11 +358,20 @@ body::before {
 }
 
 .gateway-status-text {
+    flex: 1;
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.5;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gateway-refresh-btn {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
     white-space: nowrap;
 }
 
@@ -1457,8 +1466,14 @@ button:disabled {
 
 .operation-type-filters {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
 }
 
 .operation-type-filters.is-empty {
@@ -1466,15 +1481,17 @@ button:disabled {
 }
 
 .operation-type-filter-chip {
-    padding: 5px 10px;
+    flex: 0 0 auto;
+    padding: 5px 9px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.03em;
     border: 1px solid transparent;
     cursor: pointer;
     transition: opacity 0.15s, filter 0.15s;
+    white-space: nowrap;
 }
 
 .operation-type-filter-chip.is-enabled.tone-move {

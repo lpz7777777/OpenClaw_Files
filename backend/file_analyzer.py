@@ -91,6 +91,8 @@ class FileAnalyzer:
     def __init__(self):
         self.use_gateway = os.getenv("USE_GATEWAY", "false").lower() == "true"
         self.gateway_failure_reason = None
+        self.analysis_unavailable_reason = ""
+        self.client = None
 
         if self.use_gateway:
             self.gateway_client = GatewayClient()
@@ -111,10 +113,15 @@ class FileAnalyzer:
                 if self.gateway_failure_reason:
                     gateway_hint = f" Gateway issue: {self.gateway_failure_reason}."
 
-                raise ValueError(
+                self.analysis_unavailable_reason = (
                     "Please set a valid ANTHROPIC_API_KEY in .env or fix the Gateway configuration."
                     + gateway_hint
                 )
+                print(
+                    "[FileAnalyzer] Warning: analysis is unavailable. "
+                    + self.analysis_unavailable_reason
+                )
+                return
 
             self.client = anthropic.Anthropic(api_key=api_key)
             print("[FileAnalyzer] Using direct Anthropic API mode")
@@ -129,6 +136,12 @@ class FileAnalyzer:
         """Analyze a folder and generate a cleanup plan."""
         last_error = None
         try:
+            if not self.use_gateway and self.client is None:
+                raise ValueError(
+                    self.analysis_unavailable_reason
+                    or "No analysis backend is currently available."
+                )
+
             normalized_mode = self._normalize_analysis_mode(mode)
             normalized_target_root_path = self._normalize_optional_target_root_path(
                 target_root_path
@@ -1359,6 +1372,20 @@ Correct JSON examples:
             return 0
         return normalized.count("/") + 1
 
+    def _prune_empty_directories(self, root_path):
+        absolute_root = os.path.abspath(str(root_path or "").strip())
+        if not absolute_root or not os.path.isdir(absolute_root):
+            return
+
+        for current_root, _, _ in os.walk(absolute_root, topdown=False):
+            if os.path.abspath(current_root) == absolute_root:
+                continue
+            try:
+                if not os.listdir(current_root):
+                    os.rmdir(current_root)
+            except OSError:
+                continue
+
     def _rewrite_relative_path_with_rename(self, relative_path: str, rename_operation: dict) -> str:
         normalized_path = self._normalize_relative_path(relative_path)
         source_prefix = self._normalize_relative_path(rename_operation.get("source", ""))
@@ -1996,7 +2023,7 @@ Correct JSON examples:
             depth = max(source_depth, target_depth)
 
             if op_type == "rename_folder":
-                return (0, -depth)
+                return (0, source_depth, target_depth)
             if op_type == "create_folder":
                 return (1, target_depth)
             if op_type in {"move", "rename"}:
@@ -2203,6 +2230,7 @@ Correct JSON examples:
                 "type": "write_readme",
                 "source": backup_path,
                 "target": readme_path,
+                "root_path": folder_path,
                 "temp_root": backup_root,
                 "existed_before": existed_before,
             },
@@ -2531,6 +2559,7 @@ Correct JSON examples:
                             "type": op_type,
                             "source": source,
                             "target": target,
+                            "root_path": folder_path,
                             "temp_root": delete_backup_root if op_type == "delete" else "",
                             "created_now": created_now if op_type == "create_folder" else False,
                             "merged_entries": merged_entries
@@ -2597,15 +2626,19 @@ Correct JSON examples:
     def rollback(self, backup_info):
         """Rollback the most recent set of file operations."""
         temp_roots = set()
+        cleanup_roots = set()
 
         try:
             for item in reversed(backup_info):
                 op_type = item.get("type")
                 source = item["source"]
                 target = item.get("target", "")
+                root_path = item.get("root_path", "")
 
                 if item.get("temp_root"):
                     temp_roots.add(item["temp_root"])
+                if root_path:
+                    cleanup_roots.add(root_path)
 
                 if op_type == "create_folder":
                     if item.get("created_now") and target and os.path.isdir(target):
@@ -2670,6 +2703,8 @@ Correct JSON examples:
 
             for temp_root in temp_roots:
                 shutil.rmtree(temp_root, ignore_errors=True)
+            for cleanup_root in cleanup_roots:
+                self._prune_empty_directories(cleanup_root)
 
             return {"success": True}
         except Exception as exc:
