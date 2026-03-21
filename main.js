@@ -11,8 +11,13 @@ const BACKEND_PORT = 8765;
 const BACKEND_STARTUP_RETRIES = 24;
 const BACKEND_STARTUP_DELAY_MS = 500;
 
+function resolveWindowIconPath() {
+    const iconPath = path.join(__dirname, "assets", "app-icon.png");
+    return fs.existsSync(iconPath) ? iconPath : undefined;
+}
+
 function createWindow() {
-    mainWindow = new BrowserWindow({
+    const windowOptions = {
         width: 1560,
         height: 960,
         minWidth: 1200,
@@ -22,7 +27,13 @@ function createWindow() {
             contextIsolation: false,
         },
         backgroundColor: "#f4efe7",
-    });
+    };
+    const iconPath = resolveWindowIconPath();
+    if (iconPath) {
+        windowOptions.icon = iconPath;
+    }
+
+    mainWindow = new BrowserWindow(windowOptions);
 
     mainWindow.setMenuBarVisibility(false);
     mainWindow.loadFile("index.html");
