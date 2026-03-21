@@ -1,6 +1,6 @@
 {
   "name": "openclaw-file-manager",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "基于 OpenClaw 的桌面文件整理工作区",
   "main": "main.js",
   "productName": "OpenClaw Files",
