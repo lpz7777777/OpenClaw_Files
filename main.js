@@ -10,6 +10,7 @@ let backendProcess = null;
 const BACKEND_PORT = 8765;
 const BACKEND_STARTUP_RETRIES = 24;
 const BACKEND_STARTUP_DELAY_MS = 500;
+const APP_USER_MODEL_ID = "com.openclaw.files";
 
 function resolveWindowIconPath() {
     const iconPath = path.join(__dirname, "assets", "app-icon.png");
@@ -182,6 +183,9 @@ function stopBackendServer() {
 }
 
 app.whenReady().then(async () => {
+    if (process.platform === "win32") {
+        app.setAppUserModelId(APP_USER_MODEL_ID);
+    }
     startBackendServer();
     await waitForBackendReady();
     createWindow();
