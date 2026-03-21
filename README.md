@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="./assets/app-icon.png" alt="OpenClaro 应用图标" width="120">
+
 **基于 OpenClaw 的智能文件夹整理应用**
 
 通过 OpenClaw AI 分析目录结构，生成可确认、可执行、可回滚的文件整理方案，并扩展支持百度网盘同步与微信文件专项清理。
@@ -469,6 +471,19 @@ OpenClaw_Files/
 
 ### 2026-03-21
 
+### 🎨 应用图标更新
+
+- 🖼️ README 顶部加入应用图标展示，仓库首页可直接查看当前版本图标
+- ✂️ 基于 `icon.jpg` 生成透明背景的应用图标资源，去除了外侧白色底色
+- 🪟 Electron 窗口与 Windows 安装包已统一接入新的应用图标
+- 🚀 `v1.0.4` release 已使用新图标重新打包并发布
+
+### 🏷️ 应用名称统一为 OpenClaro
+
+- ✨ 窗口标题、顶部品牌名、安装包名与 GitHub Release 标题已统一切换为 `OpenClaro`
+- 📦 新安装包命名改为 `OpenClaro-Setup-x.x.x.exe`
+- ☁️ 应用创建的同步任务前缀也同步更新为 `OpenClaro Sync`
+
 ### ☁️ 百度网盘定时任务可见性修复
 
 - ✅ 创建每日同步任务成功后，新任务会立即显示在应用内任务列表中
@@ -528,7 +543,7 @@ OpenClaw_Files/
 
 前往 [GitHub Releases](https://github.com/lpz7777777/OpenClaw_Files/releases) 页面，下载最新版本的安装包：
 
-1. 📦 下载 `OpenClaw Files-Setup-x.x.x.exe`
+1. 📦 下载 `OpenClaro-Setup-x.x.x.exe`
 2. 🖱️ 双击运行安装程序
 3. 📂 选择安装目录（默认即可）
 4. ✅ 完成安装后，桌面和开始菜单会自动创建快捷方式
@@ -593,7 +608,7 @@ npx electron-builder --win nsis
 
 ```
 release/
-├── OpenClaw Files-Setup-1.0.0.exe   # ← 这就是分发给用户的安装包
+├── OpenClaro-Setup-1.0.0.exe        # ← 这就是分发给用户的安装包
 ├── latest.yml                        # 自动更新元数据（可选上传）
 └── ...
 ```
@@ -615,9 +630,9 @@ git push origin main
 gh auth login
 
 # 创建 Release 并上传安装包
-gh release create v1.0.0 "release/OpenClaw Files-Setup-1.0.0.exe" \
-  --title "OpenClaw Files v1.0.0" \
-  --notes "OpenClaw Files v1.0.0 正式版本"
+gh release create v1.0.0 "release/OpenClaro-Setup-1.0.0.exe" \
+  --title "OpenClaro v1.0.0" \
+  --notes "OpenClaro v1.0.0 正式版本"
 ```
 
 或在 GitHub 网页端操作：
@@ -625,7 +640,7 @@ gh release create v1.0.0 "release/OpenClaw Files-Setup-1.0.0.exe" \
 1. 进入仓库页面 → **Releases** → **Draft a new release**
 2. 创建标签（如 `v1.0.0`）
 3. 填写标题和说明
-4. 上传 `release/OpenClaw Files-Setup-1.0.0.exe`
+4. 上传 `release/OpenClaro-Setup-1.0.0.exe`
 5. 点击 **Publish release**
 
 ---

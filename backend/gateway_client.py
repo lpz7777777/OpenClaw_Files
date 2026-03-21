@@ -376,7 +376,7 @@ class GatewayClient:
             "maxProtocol": 3,
             "client": {
                 "id": self.client_id,
-                "version": "openclaw-file-manager",
+                "version": "openclaro",
                 "platform": "python",
                 "mode": self.client_mode,
                 "instanceId": str(uuid.uuid4()),
@@ -384,7 +384,7 @@ class GatewayClient:
             "role": "operator",
             "scopes": self.requested_scopes,
             "caps": ["tool-events"],
-            "userAgent": "openclaw-file-manager/python",
+            "userAgent": "openclaro/python",
             "locale": "zh-CN",
             "device": self._build_device_signature(nonce, signed_at_ms, signature_token),
         }

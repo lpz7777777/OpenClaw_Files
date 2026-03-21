@@ -1603,8 +1603,6 @@ README was updated in the same round to reflect:
 
 - `node --check renderer.js`
 
----
-
 ## 25. 2026-03-21 Fix: Scheduled Baidu Netdisk Jobs Not Visible In-App
 ### 1. Goal
 
@@ -1722,3 +1720,154 @@ README was updated in the same round to reflect:
 ### 6. Verification
 
 - `node --check renderer.js`
+
+---
+
+## 27. 2026-03-21 Update: App Icon Integration And README Icon Display
+### 1. Goal
+
+Replace the default Electron app icon with the project's own icon, remove the visible white background around the source image, and make the current app icon visible directly in README.
+
+### 2. Source Asset And Processing
+
+The user provided the source image as:
+
+- [icon.jpg](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/icon.jpg)
+
+This source image had a white outer background, which was not suitable for use as a Windows app icon directly.
+
+The processing result was:
+
+- generate a transparent-background PNG for general display and runtime use
+- generate an ICO for Windows packaging
+- keep the original `icon.jpg` in the repo as the source asset
+
+Generated icon assets:
+
+- [assets/app-icon.png](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/assets/app-icon.png)
+- [assets/app-icon.ico](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/assets/app-icon.ico)
+
+### 3. Background Removal Strategy
+
+The white background was not removed by naively deleting all white pixels. Instead, the icon processing kept inner light details intact as much as possible by:
+
+- removing only near-white pixels connected to the outer edge
+- softening almost-white fringe pixels to reduce visible halo
+- centering the result on a padded transparent square canvas for cleaner Windows icon rendering
+
+This makes the icon look cleaner in the app window, taskbar, and installer shell.
+
+### 4. App Integration
+
+Two app layers were updated:
+
+- runtime window icon in Electron
+- Windows installer/build icon in electron-builder
+
+Implementation details:
+
+- [main.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/main.js)
+  uses `assets/app-icon.png` for `BrowserWindow`
+- [package.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package.json)
+  sets Windows build icon to `assets/app-icon.ico`
+
+After this change, build output no longer falls back to the default Electron icon.
+
+### 5. README Sync
+
+README was updated in the same round to reflect:
+
+- app icon is now displayed near the top of the repository page
+- recent changes now mention the icon refresh and `v1.0.4` release
+
+### 6. Release Follow-up
+
+Because the earlier `v1.0.3` release had already been published before icon integration, a new release was created:
+
+- `v1.0.4`
+
+This ensures the GitHub Release installer also ships with the new icon.
+
+### 7. Files
+
+- [icon.jpg](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/icon.jpg)
+- [assets/app-icon.png](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/assets/app-icon.png)
+- [assets/app-icon.ico](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/assets/app-icon.ico)
+- [main.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/main.js)
+- [package.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package.json)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 8. Verification
+
+- `node --check main.js`
+- `npm run build:win`
+- build log confirms `assets/app-icon.ico` is resolved during Windows packaging
+
+---
+
+## 28. 2026-03-21 Update: Rename App To OpenClaro
+### 1. Goal
+
+Align the visible app name with the project's current brand direction by changing the shipped application name from `OpenClaw Files` to `OpenClaro`.
+
+### 2. Visible Name Changes
+
+The user-facing name was updated across the main app surfaces:
+
+- window/document title
+- top-left brand label
+- installer artifact name
+- GitHub Release title
+- in-app error text
+- managed cloud-sync job prefix
+
+The goal was to make the packaged desktop app consistently present itself as `OpenClaro`, while avoiding unnecessary migration risk in repository paths and existing GitHub repo naming.
+
+### 3. Packaging Impact
+
+The packaging identity now uses:
+
+- `productName: OpenClaro`
+- artifact pattern: `OpenClaro-Setup-x.x.x.exe`
+
+This means subsequent Windows installer builds and release assets will use the new app name directly.
+
+### 4. Runtime/Backend Text Updates
+
+Additional supporting strings were updated so the rename feels complete:
+
+- backend-generated summary README text now refers to `OpenClaro`
+- scheduled sync job prefix now uses `OpenClaro Sync`
+- gateway client metadata/user-agent was renamed from the old internal label to `openclaro`
+
+### 5. README Sync
+
+README was updated in the same round to reflect:
+
+- new installer filename examples
+- updated GitHub Release command examples
+- a recent-changes note stating that the app name is now unified as `OpenClaro`
+
+### 6. Release Follow-up
+
+Because `v1.0.4` had already been published before the rename, a new renamed build/release was prepared as:
+
+- `v1.0.5`
+
+### 7. Files
+
+- [package.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package.json)
+- [package-lock.json](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/package-lock.json)
+- [index.html](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/index.html)
+- [main.js](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/main.js)
+- [backend/cloud_sync.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/cloud_sync.py)
+- [backend/file_analyzer.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/file_analyzer.py)
+- [backend/gateway_client.py](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/backend/gateway_client.py)
+- [README.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/README.md)
+- [DEV_LOG.md](/d:/Coding%20Demo/202603_OpenClaw_Files/OpenClaw_Files/DEV_LOG.md)
+
+### 8. Verification
+
+- `node --check main.js`
+- `npm run build:win`

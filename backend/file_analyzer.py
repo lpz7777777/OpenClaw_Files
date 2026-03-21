@@ -2170,7 +2170,7 @@ Correct JSON examples:
 
         return f"""# {folder_name} 文件夹结构说明
 
-本文件由 OpenClaw Files 自动生成，用于说明“确认全部”执行完成后的当前目录结构。
+本文件由 OpenClaro 自动生成，用于说明“确认全部”执行完成后的当前目录结构。
 
 ## 当前概览
 

@@ -120,7 +120,7 @@ function startBackendServer() {
         }
         dialog.showErrorBox(
             "后端启动失败",
-            `无法启动 OpenClaw Files 后端服务：${error.message}`
+            `无法启动 OpenClaro 后端服务：${error.message}`
         );
     });
 

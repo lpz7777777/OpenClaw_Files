@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover - fallback for root-level imports
     from backend.gateway_client import GatewayClient
 
 
-MANAGED_JOB_PREFIX = "OpenClaw Files Sync"
+MANAGED_JOB_PREFIX = "OpenClaro Sync"
 MANAGED_JOB_MARKER = "managed-by=openclaw-files"
 
 

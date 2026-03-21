@@ -1,9 +1,9 @@
 {
-  "name": "openclaw-file-manager",
-  "version": "1.0.4",
+  "name": "openclaro",
+  "version": "1.0.5",
   "description": "基于 OpenClaw 的桌面文件整理工作区",
   "main": "main.js",
-  "productName": "OpenClaw Files",
+  "productName": "OpenClaro",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
@@ -19,7 +19,7 @@
   "license": "MIT",
   "build": {
     "appId": "com.openclaw.files",
-    "productName": "OpenClaw Files",
+    "productName": "OpenClaro",
     "artifactName": "${productName}-Setup-${version}.${ext}",
     "asar": true,
     "directories": {
