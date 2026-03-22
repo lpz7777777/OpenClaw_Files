@@ -89,8 +89,41 @@ def _showcase_cache_dir() -> Path:
     return Path(__file__).resolve().parent / "showcase_cache"
 
 
+def _showcase_cache_dir_candidates() -> List[Path]:
+    if not getattr(sys, "frozen", False):
+        return [_showcase_cache_dir()]
+
+    executable_dir = Path(sys.executable).resolve().parent
+    candidates: List[Path] = [
+        executable_dir / "showcase_cache",
+        executable_dir / "_internal" / "showcase_cache",
+    ]
+
+    runtime_extract_dir = getattr(sys, "_MEIPASS", None)
+    if runtime_extract_dir:
+        candidates.append(Path(runtime_extract_dir) / "showcase_cache")
+
+    deduplicated: List[Path] = []
+    seen = set()
+    for candidate in candidates:
+        key = str(candidate.resolve(strict=False))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append(candidate)
+    return deduplicated
+
+
 def _showcase_plan_path() -> Path:
     return _showcase_cache_dir() / SHOWCASE_PLAN_FILE_NAME
+
+
+def _find_existing_showcase_plan_path() -> Optional[Path]:
+    for cache_dir in _showcase_cache_dir_candidates():
+        candidate = cache_dir / SHOWCASE_PLAN_FILE_NAME
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _normalize_relative_path(path_value: str) -> str:
@@ -465,8 +498,8 @@ def _prune_non_executable_showcase_operations(
 
 
 def load_showcase_plan() -> Optional[Dict[str, Any]]:
-    plan_path = _showcase_plan_path()
-    if not plan_path.exists():
+    plan_path = _find_existing_showcase_plan_path()
+    if not plan_path:
         return None
 
     try:
@@ -607,6 +640,8 @@ def get_showcase_analysis(
             "demo_label": "展示模式",
         }
 
+    existing_plan_path = _find_existing_showcase_plan_path() or _showcase_plan_path()
+
     return {
         "success": True,
         "plan": cached.get("plan") or {},
@@ -616,5 +651,5 @@ def get_showcase_analysis(
         "demo_mode": True,
         "demo_label": "展示模式",
         "showcase_plan_source": cached.get("source") or "openclaw",
-        "showcase_plan_path": str(_showcase_plan_path()),
+        "showcase_plan_path": str(existing_plan_path),
     }
